@@ -1,0 +1,20 @@
+name: xtensor-io
+channels:
+  - conda-forge
+dependencies:
+  # Build dependencies
+  - cmake
+  - ninja
+  # Host dependencies
+  - openimageio=2.2.7
+  - libsndfile=1.0.30
+  - zlib=1.2.11
+  - highfive=2.1.1 
+  - blosc
+  - gdal
+  - nlohmann_json
+  - google-cloud-cpp=1.21.0
+  - aws-sdk-cpp
+  - xtensor=0.25.0
+  - cpp-filesystem
+
