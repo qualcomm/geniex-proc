@@ -8,7 +8,6 @@
 
 #include "geniex-proc/qwen2vl.h"
 
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -30,11 +29,8 @@ namespace geniex::qwen2vl {
 // Special tokens (Qwen2-VL)
 // ============================================================
 
-static const std::string BOS_TOKEN          = "<|im_start|>";
-static const std::string EOS_TOKEN          = "<|im_end|>";
-static const std::string IMAGE_PAD_TOKEN    = "<|image_pad|>";
-static const std::string VISION_START_TOKEN = "<|vision_start|>";
-static const std::string VISION_END_TOKEN   = "<|vision_end|>";
+static const std::string BOS_TOKEN = "<|im_start|>";
+static const std::string EOS_TOKEN = "<|im_end|>";
 
 // ============================================================
 // Pimpl
@@ -128,45 +124,60 @@ struct Qwen2VLProcessor::Impl {
     // Chat template — Qwen2-VL format
     // ------------------------------------------------------------------
 
-    /// Build the formatted prompt string.
+    /// Build input_ids directly, inserting special token IDs for vision blocks
+    /// without relying on the tokenizer to recognize them.
     ///
     /// For each message:
-    ///   <|im_start|>{role}\n
-    ///   [<|vision_start|><|image_pad|>×n<|vision_end|> for each image in message]
-    ///   {content}<|im_end|>\n
+    ///   encode("<|im_start|>{role}\n")
+    ///   [VISION_START_ID, IMAGE_PAD_ID×n, VISION_END_ID for each image]
+    ///   encode("{content}<|im_end|>\n")
     ///
     /// image_patch_counts[i] = grid_t * grid_h * grid_w for the i-th image
-    /// (images are assigned to messages in the order they appear across all messages).
-    std::string apply_chat_template(
+    std::vector<int32_t> build_input_ids(
         const std::vector<geniex::ChatMessage>& messages,
         const std::vector<size_t>& image_patch_counts,
         bool add_generation_prompt) const
     {
-        std::ostringstream ss;
+        // Special token IDs for Qwen2-VL / Qwen2.5-Omni
+        static constexpr int32_t VISION_START_ID = 151652;
+        static constexpr int32_t VISION_END_ID   = 151653;
+        static constexpr int32_t IMAGE_PAD_ID    = 151655;
+
+        const size_t merge_length = static_cast<size_t>(config_.merge_size) * config_.merge_size;
+
+        std::vector<int32_t> ids;
         size_t image_idx = 0;
 
         for (const auto& msg : messages) {
-            ss << BOS_TOKEN << msg.role << "\n";
+            // Encode message header: "<|im_start|>{role}\n"
+            auto header_ids = tokenizer_->encode(
+                BOS_TOKEN + msg.role + "\n", false);
+            ids.insert(ids.end(), header_ids.begin(), header_ids.end());
 
-            // Insert vision blocks for each image in this message
+            // Insert vision blocks for each image in this message.
+            // n_pads = grid_t*grid_h*grid_w / merge_size² because the vision
+            // encoder merges merge_size² patches into one embedding.
             for (size_t i = 0; i < msg.mm_content_paths.size(); ++i) {
                 if (image_idx >= image_patch_counts.size()) break;
-                ss << VISION_START_TOKEN;
-                size_t n_pads = image_patch_counts[image_idx++];
-                for (size_t p = 0; p < n_pads; ++p) {
-                    ss << IMAGE_PAD_TOKEN;
-                }
-                ss << VISION_END_TOKEN;
+                ids.push_back(VISION_START_ID);
+                size_t n_pads = image_patch_counts[image_idx++] / merge_length;
+                ids.insert(ids.end(), n_pads, IMAGE_PAD_ID);
+                ids.push_back(VISION_END_ID);
             }
 
-            ss << msg.content << EOS_TOKEN << "\n";
+            // Encode message content + close: "{content}<|im_end|>\n"
+            auto content_ids = tokenizer_->encode(
+                msg.content + EOS_TOKEN + "\n", false);
+            ids.insert(ids.end(), content_ids.begin(), content_ids.end());
         }
 
         if (add_generation_prompt) {
-            ss << BOS_TOKEN << "assistant\n";
+            auto gen_ids = tokenizer_->encode(
+                BOS_TOKEN + "assistant\n", false);
+            ids.insert(ids.end(), gen_ids.begin(), gen_ids.end());
         }
 
-        return ss.str();
+        return ids;
     }
 };
 
@@ -227,15 +238,11 @@ BatchFeatures Qwen2VLProcessor::process(const geniex::VisionProcessorInput& inpu
         }
     }
 
-    // 3. Build chat-templated text
-    std::string text = impl_->apply_chat_template(messages, image_patch_counts, add_generation_prompt);
+    // 3. Build input_ids directly (special tokens inserted as IDs, not text)
+    std::vector<int32_t> input_ids = impl_->build_input_ids(messages, image_patch_counts, add_generation_prompt);
 
-    // 4. Tokenize
-    std::vector<int32_t> input_ids = impl_->tokenizer_->encode(text, /*add_special_tokens=*/false);
-
-    // 5. Assemble BatchFeatures
+    // 4. Assemble BatchFeatures
     BatchFeatures features;
-    features.text      = std::move(text);
     features.input_ids = std::move(input_ids);
     if (!all_image_paths.empty()) {
         features.pixel_values   = std::move(pixel_values);
