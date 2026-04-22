@@ -28,6 +28,11 @@ struct GENIEXPROC_API Qwen2VLConfig {
     float   rescale_factor    = 1.0f / 255.0f;
     std::vector<float> image_mean = {0.48145466f, 0.4578275f,  0.40821073f};
     std::vector<float> image_std  = {0.26862954f, 0.26130258f, 0.27577711f};
+
+    // When both are non-zero, smart_resize() is skipped and every image is
+    // resized to exactly (fixed_height x fixed_width), ignoring aspect ratio.
+    int     fixed_height      = 0;
+    int     fixed_width       = 0;
 };
 
 // ============================================================

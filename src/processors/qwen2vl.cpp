@@ -63,13 +63,19 @@ struct Qwen2VLProcessor::Impl {
         int resized_height = height;
         int resized_width  = width;
 
-        // 1. Smart resize
+        // 1. Resize
         xt::xtensor<uint8_t, 3> processed = image;
-        std::tie(resized_height, resized_width) = geniex::vision::smart_resize(
-            height, width,
-            config_.patch_size * config_.merge_size,
-            static_cast<int>(config_.min_pixels),
-            static_cast<int>(config_.max_pixels));
+        if (config_.fixed_height > 0 && config_.fixed_width > 0) {
+            // Fixed-shape mode: ignore aspect ratio and resize to the exact fixed size.
+            resized_height = config_.fixed_height;
+            resized_width  = config_.fixed_width;
+        } else {
+            std::tie(resized_height, resized_width) = geniex::vision::smart_resize(
+                height, width,
+                config_.patch_size * config_.merge_size,
+                static_cast<int>(config_.min_pixels),
+                static_cast<int>(config_.max_pixels));
+        }
         processed = geniex::vision::resize_image(image, resized_height, resized_width);
 
         // 2. Cast to float, rescale, normalize
