@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: Apache-2.0
+//
 // src/processors/qwen2vl.cpp — Qwen2-VL processor implementation.
 //
 // Compiled only when GENIEXPROC_BUILD_QWEN2VL is ON.

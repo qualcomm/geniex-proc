@@ -1,0 +1,5 @@
+# TODO: populate after OSLG provisions the Maintainers.geniex-proc group.
+# Until then, this placeholder routes all review requests to the
+# geniex-proc-maintainers team; replace the team handle or add individual
+# GitHub handles once the team exists.
+* @qualcomm/geniex-proc-maintainers

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/todogroup/repolinter/master/rulesets/schema.json",
+  "version": 2,
+  "axioms": {},
+  "rules": {
+    "copyright-license-headers-exist": {
+      "level": "error",
+      "where": [
+        "!third_party/**",
+        "!include/json.hpp",
+        "!qualcomm-repository-template/**"
+      ]
+    }
+  }
+}

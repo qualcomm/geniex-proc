@@ -112,3 +112,18 @@ For mm-process module enhancements:
 ### 📋 Planned Features
 - More vision-language model processors
 - TBD...
+
+## Getting in Contact
+
+* [Report an Issue on GitHub](../../issues)
+* [Open a Discussion on GitHub](../../discussions)
+<!-- TODO: confirm mailing-list address with OSLG once provisioned. -->
+* [E-mail us](mailto:geniex-proc-maintainers@qti.qualcomm.com) for general questions
+
+## Contributing
+
+For details on contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+geniex-proc is licensed under the [Apache-2.0 License](https://spdx.org/licenses/Apache-2.0.html). See [LICENSE.txt](LICENSE.txt) for the full license text.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: Apache-2.0
+//
 // src/vision/vision.cpp — Internal shared vision utilities implementation.
 //
 // Compiled only when GENIEXPROC_ENABLE_VISION is ON.

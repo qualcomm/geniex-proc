@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: Apache-2.0
+//
 // Adapted from llama.cpp (https://github.com/ggml-org/llama.cpp)
 // Original work Copyright (c) 2023-2026 The ggml authors
 // Licensed under the MIT License (https://opensource.org/licenses/MIT)

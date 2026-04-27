@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: Apache-2.0
+//
 // geniex::Sampler and geniex::Grammar implementations
 // These wrap the internal geniex_sampler_context and grammar machinery.
 // All internal types (geniex_sampler_context, geniex_vocab_interface, etc.)
