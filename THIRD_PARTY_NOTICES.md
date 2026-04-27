@@ -61,7 +61,7 @@ file for the full legal text.
 
 ### tokenizers-cpp (`third_party/tokenizers-cpp/`, git submodule)
 
-- **Upstream:** https://github.com/GenieXAI/tokenizers-cpp
+- **Upstream:** https://github.com/qcom-it-nexa-ai/tokenizers-cpp
 - **SPDX:** `Apache-2.0`
 - **License file:** `third_party/tokenizers-cpp/LICENSE`
 - **Usage:** BPE / WordPiece / SentencePiece tokenization.

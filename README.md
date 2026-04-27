@@ -9,7 +9,7 @@ A high-performance C++ library for multimodal data preprocessing, designed to ef
 | Image    | STB Image (lightweight), OpenCV (advanced), Clipper/Clipper2,  | Resizing, normalization, color conversion, augmentation, contour extraction |
 | Audio    | [libsndfile](https://github.com/libsndfile/libsndfile), [xtensor-fftw](https://github.com/xtensor-stack/xtensor-fftw), [soxr](https://github.com/dofuuz/soxr) | Resampling, MFCC extraction, spectrograms |
 | Video    | OpenCV, FFmpeg, [Decord](https://github.com/dmlc/decord) | Frame extraction, temporal sampling, motion detection |
-| Text     | [tokenizers-cpp](https://github.com/GenieXAI/tokenizers-cpp) | Tokenization, BPE |
+| Text     | [tokenizers-cpp](https://github.com/qcom-it-nexa-ai/tokenizers-cpp) | Tokenization, BPE |
 | Others   | xtensor, xtl, xtensor-io, xtensor-blas, zlib, etc. | General multi-dimensional tensors, linear algebra, npy/npz, etc. |
 
 ## Key Features
