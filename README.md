@@ -126,4 +126,4 @@ For details on contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-geniex-proc is licensed under the [Apache-2.0 License](https://spdx.org/licenses/Apache-2.0.html). See [LICENSE.txt](LICENSE.txt) for the full license text.
+geniex-proc is licensed under the [BSD 3-Clause License](https://spdx.org/licenses/BSD-3-Clause.html). See [LICENSE.txt](LICENSE.txt) for the full license text.

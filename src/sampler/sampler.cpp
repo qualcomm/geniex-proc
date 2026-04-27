@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: BSD-3-Clause
 //
 // geniex::Sampler and geniex::Grammar implementations
 // These wrap the internal geniex_sampler_context and grammar machinery.

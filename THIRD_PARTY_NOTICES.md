@@ -2,7 +2,7 @@
 
 `geniex-proc` incorporates or depends on the third-party components listed
 below. Each component is distributed under its own license; the terms of
-those licenses continue to govern use of the component. The Apache-2.0
+those licenses continue to govern use of the component. The BSD 3-Clause
 license applied to first-party `geniex-proc` code does **not** supersede
 them.
 
@@ -86,7 +86,7 @@ file for the full legal text.
 Portions of `src/geniex-sampling/` are derived from or adapted from the
 [ggml](https://github.com/ggerganov/ggml) project, which is distributed
 under the MIT license. Files that contain derived material preserve the
-original ggml copyright notice alongside the Qualcomm Apache-2.0 header.
+original ggml copyright notice alongside the Qualcomm BSD 3-Clause header.
 
 ---
 
