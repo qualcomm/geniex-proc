@@ -7,7 +7,7 @@
 > - **xt::xtensor**: Has dimensions set at compilation time, enabling optimizations like stack-allocated shapes and strides.
 > - **xt::xtensor_fixed**: Has shape fixed at compile time, allowing even more optimizations including stack storage allocation and compile-time stride computation.
 
-We need a short internal documentation about the use of the `xtensor` library as well as how we could combine the library with other processing tool.
+This section gives a short guide to the use of the `xtensor` library and how it can be combined with other processing tools.
 
 ## Data transfer between the xtensor and the GGML
 We show an example below how to use xtensor to optimize the GGML. It is a minimum example, but it is enough for us to understand how to make it communicate with the GGML library:

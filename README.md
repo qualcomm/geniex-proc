@@ -9,7 +9,7 @@ A high-performance C++ library for multimodal data preprocessing, designed to ef
 | Image    | STB Image (lightweight), OpenCV (advanced), Clipper/Clipper2,  | Resizing, normalization, color conversion, augmentation, contour extraction |
 | Audio    | [libsndfile](https://github.com/libsndfile/libsndfile), [xtensor-fftw](https://github.com/xtensor-stack/xtensor-fftw), [soxr](https://github.com/dofuuz/soxr) | Resampling, MFCC extraction, spectrograms |
 | Video    | OpenCV, FFmpeg, [Decord](https://github.com/dmlc/decord) | Frame extraction, temporal sampling, motion detection |
-| Text     | [tokenizers-cpp](https://github.com/GenieXAI/tokenizers-cpp) | Tokenization, BPE |
+| Text     | [tokenizers-cpp](https://github.com/qcom-it-nexa-ai/tokenizers-cpp) | Tokenization, BPE |
 | Others   | xtensor, xtl, xtensor-io, xtensor-blas, zlib, etc. | General multi-dimensional tensors, linear algebra, npy/npz, etc. |
 
 ## Key Features
@@ -112,3 +112,18 @@ For mm-process module enhancements:
 ### 📋 Planned Features
 - More vision-language model processors
 - TBD...
+
+## Getting in Contact
+
+* [Report an Issue on GitHub](../../issues)
+* [Open a Discussion on GitHub](../../discussions)
+<!-- TODO: confirm mailing-list address with OSLG once provisioned. -->
+* [E-mail us](mailto:geniex-proc-maintainers@qti.qualcomm.com) for general questions
+
+## Contributing
+
+For details on contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+geniex-proc is licensed under the [BSD 3-Clause License](https://spdx.org/licenses/BSD-3-Clause.html). See [LICENSE.txt](LICENSE.txt) for the full license text.

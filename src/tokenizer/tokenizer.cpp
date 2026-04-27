@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+//
 // geniex::Tokenizer implementation
 // Wraps tokenizers-cpp behind a pimpl to prevent tokenizers_cpp.h from leaking
 // into consumer translation units.
