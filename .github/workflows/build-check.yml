@@ -1,7 +1,6 @@
 # Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# Compile-only check for geniex-proc + geniex-proc-vision on x86_64 Windows.
 
 name: Build Check
 
@@ -57,12 +56,18 @@ jobs:
         run: |
           cmake -B build `
             -DCMAKE_BUILD_TYPE=Release `
-            -DGENIEXPROC_ENABLE_VISION=ON
+            -DGENIEXPROC_ENABLE_VISION=ON `
+            -DGENIEXPROC_BUILD_TESTS=ON
 
       - name: Build
         shell: pwsh
         run: |
           cmake --build build --config Release -j
+
+      - name: Test
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --output-on-failure
 
       - name: Upload build logs on failure
         if: failure()
@@ -73,5 +78,6 @@ jobs:
             build/**/*.log
             build/CMakeFiles/CMakeOutput.log
             build/CMakeFiles/CMakeError.log
+            build/Testing/**/*.log
           if-no-files-found: ignore
           retention-days: 7

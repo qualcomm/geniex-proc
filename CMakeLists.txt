@@ -22,6 +22,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)  # Used for VSCode intellisense to highlig
 
 option(GENIEXPROC_INSTALL          "Install geniex-proc"                    OFF)
 option(GENIEXPROC_BUILD_SHARED_LIBS "Build geniex-proc libraries as shared (.dll/.so) instead of static (.lib/.a)" OFF)
+option(GENIEXPROC_BUILD_TESTS      "Build and register CTest unit tests (uses GoogleTest via FetchContent)" OFF)
 
 # Library type — controlled by GENIEXPROC_BUILD_SHARED_LIBS
 if(GENIEXPROC_BUILD_SHARED_LIBS)
@@ -177,3 +178,11 @@ if(GENIEXPROC_INSTALL)
         DESTINATION lib/cmake/geniex-proc
     )
 endif(GENIEXPROC_INSTALL)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tests  —  CTest suite (opt-in via GENIEXPROC_BUILD_TESTS)
+# ─────────────────────────────────────────────────────────────────────────────
+if(GENIEXPROC_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
