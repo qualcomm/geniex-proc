@@ -47,9 +47,15 @@ struct GENIEXPROC_API Qwen2VLConfig {
 class GENIEXPROC_API Qwen2VLProcessor : public geniex::VisionProcessor {
 public:
     /// Create a Qwen2VLProcessor from a tokenizer.json path and optional config.
+    ///
+    /// @param image_marker_override Optional override for the text sentinel
+    ///        emitted per image by apply_chat_template(). Leave empty to use
+    ///        geniex::kDefaultImageMarker.
     /// @throws std::runtime_error if the tokenizer file cannot be loaded.
-    static std::unique_ptr<Qwen2VLProcessor> create(const std::string& tokenizer_path,
-                                                    const Qwen2VLConfig& config = {});
+    static std::unique_ptr<Qwen2VLProcessor> create(
+        const std::string& tokenizer_path,
+        const Qwen2VLConfig& config = {},
+        std::string image_marker_override = {});
 
     virtual ~Qwen2VLProcessor() = default;
 
@@ -60,9 +66,14 @@ public:
     /// Access the underlying tokenizer (encode / decode / is_eog).
     geniex::Tokenizer& tokenizer();
 
-    /// Process a conversation with optional images into model-ready inputs.
-    /// Images are loaded from ChatMessage::mm_content_paths in message order.
-    BatchFeatures process(const geniex::VisionProcessorInput& input) override;
+    std::string apply_chat_template(
+        const std::vector<geniex::ChatMessage>& messages,
+        bool add_generation_prompt = true) const override;
+
+    /// @throws std::runtime_error if the marker count does not match.
+    BatchFeatures process(
+        const std::string& formatted_text,
+        const std::vector<std::string>& image_paths) override;
 
 protected:
     Qwen2VLProcessor() = default;
@@ -71,7 +82,8 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 
-    explicit Qwen2VLProcessor(std::unique_ptr<Impl> impl);
+    Qwen2VLProcessor(std::unique_ptr<Impl> impl,
+                     std::string image_marker_override);
 };
 
 }  // namespace geniex::qwen2vl
