@@ -156,12 +156,15 @@ struct Qwen2VLProcessor::Impl {
                     std::string(image_marker) + "'");
             }
 
+
             out += BOS_TOKEN;
             out += role_to_string(msg.role);
             out += '\n';
+
             for (size_t i = 0; i < msg.mm_content.size(); ++i) {
                 out += image_marker;
             }
+            
             out += msg.content;
             out += EOS_TOKEN;
             out += '\n';
@@ -169,7 +172,8 @@ struct Qwen2VLProcessor::Impl {
 
         if (add_generation_prompt) {
             out += BOS_TOKEN;
-            out += "assistant\n";
+            out += role_to_string(geniex::Role::Assistant);
+            out += '\n';
         }
 
         return out;
