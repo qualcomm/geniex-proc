@@ -157,9 +157,9 @@ struct Qwen2VLProcessor::Impl {
             }
 
             out += BOS_TOKEN;
-            out += msg.role;
+            out += role_to_string(msg.role);
             out += '\n';
-            for (size_t i = 0; i < msg.mm_content_paths.size(); ++i) {
+            for (size_t i = 0; i < msg.mm_content.size(); ++i) {
                 out += image_marker;
             }
             out += msg.content;
