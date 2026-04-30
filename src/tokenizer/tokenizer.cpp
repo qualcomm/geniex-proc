@@ -7,11 +7,12 @@
 
 #include "geniex-proc/tokenizer.h"
 
-#include <fstream>
 #include <stdexcept>
 #include <string>
 
 // Internal includes — never exposed in public headers
+#include "src/internal/utils.h"
+
 #include <tokenizers_cpp.h>
 
 #include "geniex-sampling/sampling-vocab.h"
@@ -29,7 +30,7 @@ struct Tokenizer::Impl {
     mutable std::unique_ptr<geniex_vocab_interface> vocab;
 
     explicit Impl(const std::string& path) {
-        tok = tokenizers::Tokenizer::FromJSON(path);
+        tok = tokenizers::Tokenizer::FromBlobJSON(read_file_to_string(path));
         if (!tok) {
             throw std::runtime_error("geniex::Tokenizer: failed to load tokenizer from: " + path);
         }
