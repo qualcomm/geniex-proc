@@ -13,6 +13,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -28,12 +29,19 @@
 
 namespace geniex::qwen2vl {
 
+Qwen2VLProcessor::~Qwen2VLProcessor() = default;
+
 // ============================================================
 // Special tokens (Qwen2-VL)
 // ============================================================
 
 static const std::string BOS_TOKEN = "<|im_start|>";
 static const std::string EOS_TOKEN = "<|im_end|>";
+
+// Special token IDs for Qwen2-VL / Qwen2.5-Omni
+static constexpr int32_t VISION_START_ID = 151652;
+static constexpr int32_t VISION_END_ID   = 151653;
+static constexpr int32_t IMAGE_PAD_ID    = 151655;
 
 // ============================================================
 // Pimpl
@@ -133,57 +141,99 @@ struct Qwen2VLProcessor::Impl {
     // Chat template — Qwen2-VL format
     // ------------------------------------------------------------------
 
-    /// Build input_ids directly, inserting special token IDs for vision blocks
-    /// without relying on the tokenizer to recognize them.
-    ///
-    /// For each message:
-    ///   encode("<|im_start|>{role}\n")
-    ///   [VISION_START_ID, IMAGE_PAD_ID×n, VISION_END_ID for each image]
-    ///   encode("{content}<|im_end|>\n")
-    ///
-    /// image_patch_counts[i] = grid_t * grid_h * grid_w for the i-th image
-    std::vector<int32_t> build_input_ids(
+
+    std::string build_template_text(
         const std::vector<geniex::ChatMessage>& messages,
-        const std::vector<size_t>& image_patch_counts,
-        bool add_generation_prompt) const
+        bool add_generation_prompt,
+        std::string_view image_marker) const
     {
-        // Special token IDs for Qwen2-VL / Qwen2.5-Omni
-        static constexpr int32_t VISION_START_ID = 151652;
-        static constexpr int32_t VISION_END_ID   = 151653;
-        static constexpr int32_t IMAGE_PAD_ID    = 151655;
-
-        const size_t merge_length = static_cast<size_t>(config_.merge_size) * config_.merge_size;
-
-        std::vector<int32_t> ids;
-        size_t image_idx = 0;
-
+        std::string out;
         for (const auto& msg : messages) {
-            // Encode message header: "<|im_start|>{role}\n"
-            auto header_ids = tokenizer_->encode(
-                BOS_TOKEN + msg.role + "\n", false);
-            ids.insert(ids.end(), header_ids.begin(), header_ids.end());
-
-            // Insert vision blocks for each image in this message.
-            // n_pads = grid_t*grid_h*grid_w / merge_size² because the vision
-            // encoder merges merge_size² patches into one embedding.
-            for (size_t i = 0; i < msg.mm_content_paths.size(); ++i) {
-                if (image_idx >= image_patch_counts.size()) break;
-                ids.push_back(VISION_START_ID);
-                size_t n_pads = image_patch_counts[image_idx++] / merge_length;
-                ids.insert(ids.end(), n_pads, IMAGE_PAD_ID);
-                ids.push_back(VISION_END_ID);
+            // Defensive: reject a literal marker inside user content — would
+            // break positional replacement during process().
+            if (!image_marker.empty() &&
+                msg.content.find(image_marker) != std::string::npos) {
+                GENIEXPROC_THROW(
+                    "ChatMessage::content contains the reserved image_marker '" +
+                    std::string(image_marker) + "'");
             }
 
-            // Encode message content + close: "{content}<|im_end|>\n"
-            auto content_ids = tokenizer_->encode(
-                msg.content + EOS_TOKEN + "\n", false);
-            ids.insert(ids.end(), content_ids.begin(), content_ids.end());
+
+            out += BOS_TOKEN;
+            out += role_to_string(msg.role);
+            out += '\n';
+
+            for (size_t i = 0; i < msg.mm_content.size(); ++i) {
+                out += image_marker;
+            }
+            
+            out += msg.content;
+            out += EOS_TOKEN;
+            out += '\n';
         }
 
         if (add_generation_prompt) {
-            auto gen_ids = tokenizer_->encode(
-                BOS_TOKEN + "assistant\n", false);
-            ids.insert(ids.end(), gen_ids.begin(), gen_ids.end());
+            out += BOS_TOKEN;
+            out += role_to_string(geniex::Role::Assistant);
+            out += '\n';
+        }
+
+        return out;
+    }
+
+    /// Tokenize `formatted_text` while splicing a vision pad block in place of
+    /// each occurrence of `image_marker`. The i-th marker is paired
+    /// positionally with `image_patch_counts[i]`.
+    ///
+    /// @throws std::runtime_error if marker count != image_patch_counts.size().
+    std::vector<int32_t> build_input_ids_from_text(
+        const std::string& formatted_text,
+        const std::vector<size_t>& image_patch_counts,
+        std::string_view image_marker) const
+    {
+        const size_t merge_length =
+            static_cast<size_t>(config_.merge_size) * config_.merge_size;
+        GENIEXPROC_CHECK(!image_marker.empty());
+
+        std::vector<int32_t> ids;
+        size_t cursor   = 0;
+        size_t img_idx  = 0;
+
+        while (cursor < formatted_text.size()) {
+            size_t hit = formatted_text.find(image_marker, cursor);
+            if (hit == std::string::npos) {
+                // Tail segment — encode and finish.
+                auto seg = tokenizer_->encode(
+                    formatted_text.substr(cursor), false);
+                ids.insert(ids.end(), seg.begin(), seg.end());
+                break;
+            }
+
+            // Encode text before the marker.
+            if (hit > cursor) {
+                auto seg = tokenizer_->encode(
+                    formatted_text.substr(cursor, hit - cursor), false);
+                ids.insert(ids.end(), seg.begin(), seg.end());
+            }
+
+            // Splice vision block for this image.
+            if (img_idx >= image_patch_counts.size()) {
+                GENIEXPROC_THROW(
+                    "formatted_text has more '" + std::string(image_marker) +
+                    "' markers than supplied images");
+            }
+            ids.push_back(VISION_START_ID);
+            size_t n_pads = image_patch_counts[img_idx++] / merge_length;
+            ids.insert(ids.end(), n_pads, IMAGE_PAD_ID);
+            ids.push_back(VISION_END_ID);
+
+            cursor = hit + image_marker.size();
+        }
+
+        if (img_idx != image_patch_counts.size()) {
+            GENIEXPROC_THROW(
+                "formatted_text has fewer '" + std::string(image_marker) +
+                "' markers than supplied images");
         }
 
         return ids;
@@ -194,41 +244,44 @@ struct Qwen2VLProcessor::Impl {
 // Qwen2VLProcessor public API
 // ============================================================
 
-Qwen2VLProcessor::Qwen2VLProcessor(std::unique_ptr<Impl> impl)
-    : impl_(std::move(impl)) {}
+Qwen2VLProcessor::Qwen2VLProcessor(std::unique_ptr<Impl> impl,
+                                   std::string image_marker_override)
+    : geniex::VisionProcessor(std::move(image_marker_override)),
+      impl_(std::move(impl)) {}
 
 /*static*/
 std::unique_ptr<Qwen2VLProcessor> Qwen2VLProcessor::create(
     const std::string& tokenizer_path,
-    const Qwen2VLConfig& config)
+    const Qwen2VLConfig& config,
+    std::string image_marker_override)
 {
     auto impl = std::make_unique<Impl>(tokenizer_path, config);
     // Can't use make_unique because ctor is private — use raw new via unique_ptr
-    return std::unique_ptr<Qwen2VLProcessor>(new Qwen2VLProcessor(std::move(impl)));
+    return std::unique_ptr<Qwen2VLProcessor>(
+        new Qwen2VLProcessor(std::move(impl), std::move(image_marker_override)));
 }
 
 geniex::Tokenizer& Qwen2VLProcessor::tokenizer() {
     return *impl_->tokenizer_;
 }
 
-BatchFeatures Qwen2VLProcessor::process(const geniex::VisionProcessorInput& input) {
-    const auto& messages             = input.messages;
-    const bool  add_generation_prompt = input.add_generation_prompt;
+std::string Qwen2VLProcessor::apply_chat_template(
+    const std::vector<geniex::ChatMessage>& messages,
+    bool add_generation_prompt) const
+{
+    return impl_->build_template_text(messages, add_generation_prompt, image_marker());
+}
 
-    // 1. Collect all image paths across all messages (in order)
-    std::vector<std::string> all_image_paths;
-    for (const auto& msg : messages) {
-        for (const auto& path : msg.mm_content_paths) {
-            all_image_paths.push_back(path);
-        }
-    }
-
-    // 2. Load and preprocess each image; accumulate pixel_values and grid_thw
+BatchFeatures Qwen2VLProcessor::process(
+    const std::string& formatted_text,
+    const std::vector<std::string>& image_paths)
+{
+    // 1. Load and preprocess each image; accumulate pixel_values and grid_thw
     xt::xarray<float>  pixel_values;
     xt::xarray<size_t> image_grid_thw;
     std::vector<size_t> image_patch_counts;  // grid_t * grid_h * grid_w per image
 
-    for (const auto& path : all_image_paths) {
+    for (const auto& path : image_paths) {
         auto image = geniex::vision::load_image(path);
         auto [patches, grid_thw] = impl_->preprocess_single_image(image);
 
@@ -247,13 +300,16 @@ BatchFeatures Qwen2VLProcessor::process(const geniex::VisionProcessorInput& inpu
         }
     }
 
-    // 3. Build input_ids directly (special tokens inserted as IDs, not text)
-    std::vector<int32_t> input_ids = impl_->build_input_ids(messages, image_patch_counts, add_generation_prompt);
+    // 2. Tokenize formatted_text while splicing vision pad blocks at each marker.
+    //    Validates that marker count matches image_paths.size().
+    std::vector<int32_t> input_ids =
+        impl_->build_input_ids_from_text(formatted_text, image_patch_counts, image_marker());
 
-    // 4. Assemble BatchFeatures
+    // 3. Assemble BatchFeatures
     BatchFeatures features;
+    features.text      = formatted_text;
     features.input_ids = std::move(input_ids);
-    if (!all_image_paths.empty()) {
+    if (!image_paths.empty()) {
         features.pixel_values   = std::move(pixel_values);
         features.image_grid_thw = std::move(image_grid_thw);
     }
