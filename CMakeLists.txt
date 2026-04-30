@@ -68,6 +68,108 @@ if(OpenBLAS_FOUND)
     endif()
 endif()
 
+# Normalize CMAKE_SYSTEM_PROCESSOR so tokenizers-cpp picks the correct Rust
+# target triple. The SDK toolchain sets it to lowercase "arm64" but
+# tokenizers-cpp only checks for "ARM64" or "aarch64".
+string(TOUPPER "${CMAKE_SYSTEM_PROCESSOR}" _proc_upper)
+if(_proc_upper STREQUAL "ARM64")
+    set(CMAKE_SYSTEM_PROCESSOR "ARM64")
+endif()
+unset(_proc_upper)
+
+# sentencepiece sets CMAKE_POSITION_INDEPENDENT_CODE ON when SPM_ENABLE_SHARED
+# is ON, which emits -fPIC — unsupported on Windows targets. Force it off.
+if(WIN32)
+    set(SPM_ENABLE_SHARED OFF CACHE BOOL "Disable sentencepiece shared lib on Windows" FORCE)
+endif()
+
+# When building with Clang targeting *-windows-msvc, CMake's MSVC variable is
+# false (it is only true for cl.exe). tokenizers-cpp uses MSVC to decide
+# between tokenizers_c.lib and libtokenizers_c.a, but Rust on Windows always
+# produces a .lib regardless of compiler.
+#
+# We cannot override TOKENIZERS_RUST_LIB via cache because tokenizers-cpp uses
+# a normal set() which shadows cache values in its own scope. Instead, we
+# generate a cargo wrapper script at configure time. The wrapper invokes the
+# real cargo with all forwarded arguments, then copies tokenizers_c.lib to
+# libtokenizers_c.a so the tokenizers-cpp copy step finds the file it expects.
+if(WIN32 AND NOT MSVC)
+    find_program(_real_cargo cargo)
+    set(_cargo_wrapper "${CMAKE_CURRENT_BINARY_DIR}/cargo_wrapper.cmake")
+    file(WRITE "${_cargo_wrapper}" [=[
+# Auto-generated cargo wrapper — forwards all args to real cargo, then
+# aliases the Windows .lib output as .a for tokenizers-cpp compatibility.
+#
+# Invoked as: cmake -P script.cmake -- build --target ... --release
+# CMAKE_ARGV0=cmake  CMAKE_ARGV1=-P  CMAKE_ARGV2=script  CMAKE_ARGV3=--
+# CMAKE_ARGV4..N = actual cargo args.  CMAKE_ARGC = total count.
+set(CARGO_ARGS)
+set(i 4)  # skip cmake, -P, script path, --
+while(i LESS CMAKE_ARGC)
+    list(APPEND CARGO_ARGS "${CMAKE_ARGV${i}}")
+    math(EXPR i "${i}+1")
+endwhile()
+
+execute_process(
+    COMMAND "@_real_cargo@" ${CARGO_ARGS}
+    RESULT_VARIABLE _ret
+)
+if(NOT _ret EQUAL 0)
+    message(FATAL_ERROR "cargo failed with exit code ${_ret}")
+endif()
+
+# Locate the built .lib and create a .a alias beside it.
+set(_cargo_target_dir "$ENV{CARGO_TARGET_DIR}")
+file(GLOB_RECURSE _libs "${_cargo_target_dir}/**/tokenizers_c.lib")
+foreach(_lib IN LISTS _libs)
+    get_filename_component(_dir "${_lib}" DIRECTORY)
+    set(_a "${_dir}/libtokenizers_c.a")
+    if(NOT EXISTS "${_a}")
+        file(COPY_FILE "${_lib}" "${_a}")
+    endif()
+endforeach()
+]=])
+    # Substitute the real cargo path into the script.
+    file(READ "${_cargo_wrapper}" _wrapper_content)
+    string(REPLACE "@_real_cargo@" "${_real_cargo}" _wrapper_content "${_wrapper_content}")
+    file(WRITE "${_cargo_wrapper}" "${_wrapper_content}")
+    unset(_wrapper_content)
+
+    # Point tokenizers-cpp at our wrapper instead of cargo directly.
+    set(CARGO_EXECUTABLE
+        "${CMAKE_COMMAND}" "-P" "${_cargo_wrapper}" "--"
+        CACHE STRING "Cargo wrapper for Windows Clang builds" FORCE)
+    unset(_cargo_wrapper)
+    unset(_real_cargo)
+endif()
+
+# sentencepiece/src/CMakeLists.txt hardcodes "-fPIC" and "-pthread" into
+# CMAKE_CXX_FLAGS unconditionally (line ~256). Clang targeting
+# arm64-pc-windows-msvc rejects -fPIC as a hard error. We patch the file
+# at configure time to guard those flags with an if(NOT WIN32) check.
+# The patch is idempotent — it only applies when the original string is present.
+if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(_spm_src_cmake
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/tokenizers-cpp/sentencepiece/src/CMakeLists.txt")
+    file(READ "${_spm_src_cmake}" _spm_content)
+    string(FIND "${_spm_content}" [=[set(CMAKE_CXX_FLAGS "-O3 -Wall -fPIC ${CMAKE_CXX_FLAGS}")]=] _spm_pos)
+    if(_spm_pos GREATER_EQUAL 0)
+        string(REPLACE
+            [=[set(CMAKE_CXX_FLAGS "-O3 -Wall -fPIC ${CMAKE_CXX_FLAGS}")]=]
+            [=[if(NOT WIN32)
+  set(CMAKE_CXX_FLAGS "-O3 -Wall -fPIC ${CMAKE_CXX_FLAGS}")
+else()
+  set(CMAKE_CXX_FLAGS "-O3 -Wall ${CMAKE_CXX_FLAGS}")
+endif()]=]
+            _spm_content "${_spm_content}")
+        file(WRITE "${_spm_src_cmake}" "${_spm_content}")
+        message(STATUS "geniex-proc: Patched sentencepiece CMakeLists.txt to remove -fPIC/-pthread on Windows")
+    endif()
+    unset(_spm_content)
+    unset(_spm_src_cmake)
+    unset(_spm_pos)
+endif()
+
 add_subdirectory(third_party/tokenizers-cpp)
 include_directories(
     third_party/tokenizers-cpp/include
