@@ -57,7 +57,7 @@ public:
         const Qwen2VLConfig& config = {},
         std::string image_marker_override = {});
 
-    virtual ~Qwen2VLProcessor() = default;
+    virtual ~Qwen2VLProcessor();
 
     // Non-copyable
     Qwen2VLProcessor(const Qwen2VLProcessor&)            = delete;

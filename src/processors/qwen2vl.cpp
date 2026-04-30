@@ -29,6 +29,8 @@
 
 namespace geniex::qwen2vl {
 
+Qwen2VLProcessor::~Qwen2VLProcessor() = default;
+
 // ============================================================
 // Special tokens (Qwen2-VL)
 // ============================================================
