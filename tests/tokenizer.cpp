@@ -94,6 +94,25 @@ TEST_F(TokenizerTest, EmptyInputProducesNoTokens) {
     EXPECT_EQ(text, "");
 }
 
+// ─── Streaming decode: decode({single_id}) ──────────────────────────────────
+// Mirrors the hot loop in llm_pipeline.cpp / vlm_pipeline.cpp, which calls
+// `tokenizer->decode({tok})` once per generated token. Concatenating those
+// pieces must reconstruct the original text for any encoded input.
+
+TEST_F(TokenizerTest, StreamingDecodeConcatenatesToFullText) {
+    ASSERT_NE(tok_, nullptr);
+
+    const std::string text = "Hello, world! 12345";
+    auto ids = tok_->encode(text, /*add_special_tokens=*/false);
+    ASSERT_FALSE(ids.empty());
+
+    std::string rebuilt;
+    for (int32_t id : ids) {
+        rebuilt += tok_->decode({id}, /*skip_special_tokens=*/true);
+    }
+    EXPECT_EQ(rebuilt, text);
+}
+
 // ─── id_to_piece / piece_to_id inverse ───────────────────────────────────────
 
 TEST_F(TokenizerTest, PieceIdRoundtripsKnownToken) {
