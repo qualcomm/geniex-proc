@@ -117,7 +117,7 @@ For mm-process module enhancements:
 * [Report an Issue on GitHub](../../issues)
 * [Open a Discussion on GitHub](../../discussions)
 * E-mail the maintainers for general questions:
-  * Zhi Cheng — [zhic@qti.qualcomm.com](mailto:zhic@qti.qualcomm.com)
+  * Perry Cheng — [zhic@qti.qualcomm.com](mailto:zhic@qti.qualcomm.com)
   * Alex Chen — [alexcw@qti.qualcomm.com](mailto:alexcw@qti.qualcomm.com)
 
 ## Contributing
