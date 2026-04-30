@@ -77,9 +77,17 @@ include_directories(
 # Helper macro: configure common properties shared by all three libs
 # ─────────────────────────────────────────────────────────────────────────────
 macro(geniexproc_configure_target TARGET_NAME)
-    # Export all symbols automatically when building shared libs on Windows
-    if(GENIEXPROC_BUILD_SHARED_LIBS AND WIN32)
-        set_target_properties(${TARGET_NAME} PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    # Use explicit API exports only; do not auto-export every symbol.
+    if(GENIEXPROC_BUILD_SHARED_LIBS)
+        target_compile_definitions(${TARGET_NAME} PRIVATE GENIEXPROC_BUILD)
+        target_compile_definitions(${TARGET_NAME} PUBLIC GENIEXPROC_SHARED)
+
+        if(NOT WIN32)
+            set_target_properties(${TARGET_NAME} PROPERTIES
+                CXX_VISIBILITY_PRESET hidden
+                VISIBILITY_INLINES_HIDDEN YES
+            )
+        endif()
     endif()
     target_include_directories(${TARGET_NAME} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
