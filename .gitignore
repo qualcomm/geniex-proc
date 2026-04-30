@@ -1,0 +1,61 @@
+# Prerequisites
+*.d
+*.pyc
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+build/
+output/
+.vscode/
+docs_xtensor/
+build-*/
+vcpkg_installed/
+
+models/
+*.ipynb
+tokenizers/
+*.npy
+*.bin
+.cursor/
+
+# Anysphere C/C++
+.cache/
+compile_commands.json
+
+fftw-3.3.10/
+mpg123-1.33.3/
+lame-3.100/
+build_logs/
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
