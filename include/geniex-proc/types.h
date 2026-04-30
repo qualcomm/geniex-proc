@@ -131,10 +131,40 @@ struct GENIEXPROC_API geniex_sampler_params {
 
 namespace geniex {
 
+/// Role of a conversation participant.
+enum class Role {
+    System,
+    User,
+    Assistant,
+};
+
+/// Returns the string representation of a Role
+inline const char* role_to_string(Role role) {
+    switch (role) {
+        case Role::System:    return "system";
+        case Role::User:      return "user";
+        case Role::Assistant: return "assistant";
+    }
+    return "unknown";
+}
+
+/// Type of a multimodal content attachment.
+enum class Modality {
+    Image,
+    Audio,
+    Video,
+};
+
+/// A single multimodal content entry: a typed file path.
+struct MMContent {
+    Modality    modality;
+    std::string path;
+};
+
 struct ChatMessage {
-    std::string role;     // "user", "assistant", "system"
+    Role        role    = Role::User;
     std::string content;
-    std::vector<std::string> mm_content_paths;  // optional: paths to images/audio/video
+    std::vector<MMContent> mm_content;  // optional multimodal attachments
 };
 
 // ============================================================
