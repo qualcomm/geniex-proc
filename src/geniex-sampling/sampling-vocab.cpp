@@ -7,6 +7,8 @@
 
 #include "sampling-vocab.h"
 
+#include "src/internal/utils.h"
+
 #include <tokenizers_cpp.h>
 
 #include <algorithm>
@@ -412,12 +414,12 @@ struct geniex_vocab_tokenizers : public geniex_vocab_interface {
 
 geniex_vocab_interface* create_geniex_vocab_tokenizers(const std::string& vocab_path) {
     try {
-        auto tokenizer = tokenizers::Tokenizer::FromJSON(vocab_path);
+        auto tokenizer = tokenizers::Tokenizer::FromBlobJSON(read_file_to_string(vocab_path));
         if (!tokenizer) {
             return nullptr;
         }
         return new geniex_vocab_tokenizers(tokenizer.release());
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
         return nullptr;
     }
 }
