@@ -153,8 +153,14 @@ if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(_spm_src_cmake
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/tokenizers-cpp/sentencepiece/src/CMakeLists.txt")
     file(READ "${_spm_src_cmake}" _spm_content)
+    # Skip if the patched wrapper is already present — the replacement keeps
+    # the original -fPIC line inside an if(NOT WIN32) branch, so a naive
+    # FIND+REPLACE would match again on every re-configure and nest the
+    # wrapper endlessly, dirtying the submodule.
+    string(FIND "${_spm_content}" [=[if(NOT WIN32)
+  set(CMAKE_CXX_FLAGS "-O3 -Wall -fPIC ${CMAKE_CXX_FLAGS}")]=] _spm_patched_pos)
     string(FIND "${_spm_content}" [=[set(CMAKE_CXX_FLAGS "-O3 -Wall -fPIC ${CMAKE_CXX_FLAGS}")]=] _spm_pos)
-    if(_spm_pos GREATER_EQUAL 0)
+    if(_spm_patched_pos LESS 0 AND _spm_pos GREATER_EQUAL 0)
         string(REPLACE
             [=[set(CMAKE_CXX_FLAGS "-O3 -Wall -fPIC ${CMAKE_CXX_FLAGS}")]=]
             [=[if(NOT WIN32)
@@ -169,6 +175,7 @@ endif()]=]
     unset(_spm_content)
     unset(_spm_src_cmake)
     unset(_spm_pos)
+    unset(_spm_patched_pos)
 endif()
 
 add_subdirectory(third_party/tokenizers-cpp)
