@@ -11,6 +11,7 @@
 #include <string>
 
 // Internal includes — never exposed in public headers
+#include "src/internal/token_bytes.h"
 #include "src/internal/utils.h"
 
 #include <tokenizers_cpp.h>
@@ -72,6 +73,13 @@ std::vector<int32_t> Tokenizer::encode(const std::string& text,
 std::string Tokenizer::decode(const std::vector<int32_t>& ids,
                                bool skip_special_tokens) const {
     return impl_->tok->Decode(ids);
+}
+
+std::string Tokenizer::decode_token(int32_t token_id, bool stream_safe_utf8) const {
+    if (stream_safe_utf8) {
+        return geniex::internal::token_id_to_raw_bytes(impl_->tok.get(), token_id);
+    }
+    return impl_->tok->Decode({token_id});
 }
 
 std::string Tokenizer::apply_chat_template(

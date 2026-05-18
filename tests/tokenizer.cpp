@@ -156,3 +156,93 @@ TEST_F(TokenizerTest, NonEogTokensAreNotEog) {
     ASSERT_FALSE(ids.empty());
     EXPECT_FALSE(tok_->is_eog(ids[0]));
 }
+
+// ─── Streaming-safe per-token decode (decode_token + stream_safe_utf8 arg)
+
+namespace {
+
+// True iff `s` contains at least one U+FFFD (encoded as EF BF BD).
+bool contains_replacement_char(const std::string& s) {
+    for (size_t i = 0; i + 2 < s.size(); ++i) {
+        if (static_cast<uint8_t>(s[i])     == 0xEF &&
+            static_cast<uint8_t>(s[i + 1]) == 0xBF &&
+            static_cast<uint8_t>(s[i + 2]) == 0xBD) {
+            return true;
+        }
+    }
+    return false;
+}
+
+}  // namespace
+
+TEST_F(TokenizerTest, DecodeTokenDefaultMatchesExplicitTrue) {
+    ASSERT_NE(tok_, nullptr);
+    auto ids = tok_->encode("Hello", /*add_special_tokens=*/false);
+    ASSERT_FALSE(ids.empty());
+    for (int32_t id : ids) {
+        EXPECT_EQ(tok_->decode_token(id),
+                  tok_->decode_token(id, /*stream_safe_utf8=*/true));
+    }
+}
+
+TEST_F(TokenizerTest, DecodeTokenStreamSafePreservesUtf8MultiByte) {
+    ASSERT_NE(tok_, nullptr);
+
+    // Pure CJK input — every codepoint is 3-byte UTF-8 and almost guaranteed
+    // to be split across multiple byte-level tokens.
+    //   \xe4\xbd\xa0\xe5\xa5\xbd          = 你好
+    //   \xe4\xb8\x96\xe7\x95\x8c          = 世界
+    //   \xf0\x9f\x9a\x80                  = 🚀  (4-byte)
+    const std::string text =
+        "\xe4\xbd\xa0\xe5\xa5\xbd\xe4\xb8\x96\xe7\x95\x8c \xf0\x9f\x9a\x80";
+
+    auto ids = tok_->encode(text, /*add_special_tokens=*/false);
+    ASSERT_FALSE(ids.empty());
+
+    std::string rebuilt;
+    for (int32_t id : ids) rebuilt += tok_->decode_token(id, /*stream_safe_utf8=*/true);
+
+    EXPECT_EQ(rebuilt, text);
+    EXPECT_FALSE(contains_replacement_char(rebuilt));
+}
+
+TEST_F(TokenizerTest, DecodeTokenStreamSafeMixedAsciiAndUtf8) {
+    ASSERT_NE(tok_, nullptr);
+
+    const std::string text =
+        "Hello, \xe4\xb8\x96\xe7\x95\x8c! \xf0\x9f\x9a\x80";
+
+    auto ids = tok_->encode(text, /*add_special_tokens=*/false);
+    ASSERT_FALSE(ids.empty());
+
+    std::string rebuilt;
+    for (int32_t id : ids) rebuilt += tok_->decode_token(id, /*stream_safe_utf8=*/true);
+
+    EXPECT_EQ(rebuilt, text);
+    EXPECT_FALSE(contains_replacement_char(rebuilt));
+}
+
+TEST_F(TokenizerTest, DecodeTokenUnsafeMatchesLegacyDecode) {
+    ASSERT_NE(tok_, nullptr);
+
+    // OFF mode must be byte-identical to tok_->decode({id}).
+    auto ids = tok_->encode("Hello, world!", /*add_special_tokens=*/false);
+    ASSERT_FALSE(ids.empty());
+
+    for (int32_t id : ids) {
+        EXPECT_EQ(tok_->decode_token(id, /*stream_safe_utf8=*/false),
+                  tok_->decode({id}, /*skip_special_tokens=*/true));
+    }
+}
+
+TEST_F(TokenizerTest, DecodeTokenStreamSafeAsciiMatchesPlainText) {
+    ASSERT_NE(tok_, nullptr);
+
+    const std::string text = "Hello, world! 12345";
+    auto ids = tok_->encode(text, /*add_special_tokens=*/false);
+    ASSERT_FALSE(ids.empty());
+
+    std::string rebuilt;
+    for (int32_t id : ids) rebuilt += tok_->decode_token(id);
+    EXPECT_EQ(rebuilt, text);
+}
