@@ -58,6 +58,17 @@ public:
                        bool skip_special_tokens = true) const;
 
     /**
+     * @brief Decode a single token for use in a per-token streaming loop.
+     *
+     * @param token_id  The token id to decode.
+     * @param stream_safe_utf8  When true (default): returns the *raw byte
+     *        sequence* contributed by this token.
+     *
+     *        When false: byte-identical to `decode({token_id})`.
+     */
+    std::string decode_token(int32_t token_id, bool stream_safe_utf8 = true) const;
+
+    /**
      * @brief Apply the model's chat template and return the formatted string.
      *
      * NOTE: Not yet supported on the base Tokenizer. Each model has its own

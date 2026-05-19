@@ -220,6 +220,7 @@ add_library(geniex-proc ${_GENIEXPROC_LIB_TYPE}
     src/geniex-sampling/geniex-sampling.cpp
     src/geniex-sampling/geniex-grammar.cpp
     src/geniex-sampling/sampling-vocab.cpp
+    src/internal/token_bytes.cpp
 )
 geniexproc_configure_target(geniex-proc)
 target_link_libraries(geniex-proc PUBLIC
