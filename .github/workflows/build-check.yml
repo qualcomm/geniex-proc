@@ -37,7 +37,7 @@ jobs:
           token: ${{ secrets.GH_PAT }}
 
       - name: Install Rust toolchain
-        # Required by third_party/tokenizers-cpp (compiles a Rust crate).
+        # Required by third-party/tokenizers-cpp (compiles a Rust crate).
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe

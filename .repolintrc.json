@@ -6,7 +6,7 @@
     "copyright-license-headers-exist": {
       "level": "error",
       "where": [
-        "!third_party/**",
+        "!third-party/**",
         "!include/json.hpp",
         "!qualcomm-repository-template/**"
       ]

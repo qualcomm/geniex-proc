@@ -47,7 +47,7 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
+    ${CMAKE_CURRENT_SOURCE_DIR}/third-party
 )
 
 find_package(OpenBLAS QUIET)
@@ -55,10 +55,10 @@ if(OpenBLAS_FOUND)
     message(STATUS "geniex-proc: OpenBLAS found")
 endif()
 
-add_subdirectory(third_party/xtl)
-add_subdirectory(third_party/xtensor)
-add_subdirectory(third_party/xtensor-io)
-add_subdirectory(third_party/xtensor-blas)
+add_subdirectory(third-party/xtl)
+add_subdirectory(third-party/xtensor)
+add_subdirectory(third-party/xtensor-io)
+add_subdirectory(third-party/xtensor-blas)
 
 if(OpenBLAS_FOUND)
     target_compile_definitions(xtensor-blas INTERFACE WITH_OPENBLAS)
@@ -69,9 +69,9 @@ if(OpenBLAS_FOUND)
     endif()
 endif()
 
-add_subdirectory(third_party/tokenizers-cpp)
+add_subdirectory(third-party/tokenizers-cpp)
 include_directories(
-    third_party/tokenizers-cpp/include
+    third-party/tokenizers-cpp/include
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ macro(geniexproc_configure_target TARGET_NAME)
     target_include_directories(${TARGET_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/geniex-sampling
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tokenizers-cpp/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/tokenizers-cpp/include
     )
 endmacro()
 
@@ -136,7 +136,7 @@ if(GENIEXPROC_ENABLE_VISION)
     )
     geniexproc_configure_target(geniex-proc-vision)
     target_include_directories(geniex-proc-vision PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
+        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/stb
     )
     # Propagate the flag so consumers can #ifdef on it
     target_compile_definitions(geniex-proc-vision PUBLIC GENIEXPROC_ENABLE_VISION)
