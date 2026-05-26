@@ -74,6 +74,17 @@ include_directories(
     third-party/tokenizers-cpp/include
 )
 
+# minja is header-only. We avoid add_subdirectory(third-party/minja) because
+# its CMakeLists FetchContents nlohmann/json (we already vendor v3.12.0 at
+# include/json.hpp, re-exported as <nlohmann/json.hpp>) and builds gtest /
+# fuzztest / examples we don't need. Linked PRIVATELY below so neither minja
+# nor nlohmann headers leak through geniex-proc's public include surface.
+add_library(geniexproc_minja INTERFACE)
+target_include_directories(geniexproc_minja INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/third-party/minja/include
+)
+target_compile_features(geniexproc_minja INTERFACE cxx_std_17)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper macro: configure common properties shared by all three libs
 # ─────────────────────────────────────────────────────────────────────────────
@@ -107,6 +118,7 @@ endmacro()
 message(STATUS "geniex-proc: Building core library (${_GENIEXPROC_LIB_TYPE})")
 add_library(geniex-proc ${_GENIEXPROC_LIB_TYPE}
     src/tokenizer/tokenizer.cpp
+    src/tokenizer/tokenizer_config.cpp
     src/sampler/sampler.cpp
     src/geniex-sampling/geniex-sampling.cpp
     src/geniex-sampling/geniex-grammar.cpp
@@ -121,6 +133,8 @@ target_link_libraries(geniex-proc PUBLIC
     xtensor-io
     xtensor-blas
 )
+# Private — minja and nlohmann must not appear in geniex-proc's public headers.
+target_link_libraries(geniex-proc PRIVATE geniexproc_minja)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # geniex-proc-vision  —  image processing

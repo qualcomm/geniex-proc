@@ -19,7 +19,7 @@ GoogleTest is pulled by CMake `FetchContent`; no system install needed.
 | Binary | Source | Covers |
 |---|---|---|
 | `sampler`   | [`sampler.cpp`](sampler.cpp)     | `Sampler::sample_greedy`, deterministic seeded sampling, logit bias, EOG detection, reset, init. No tokenizer needed. |
-| `tokenizer` | [`tokenizer.cpp`](tokenizer.cpp) | `Tokenizer::from_file`, encode / decode roundtrip (ASCII + UTF-8), streaming single-token decode, `id_to_piece` ⇄ `piece_to_id`, special-token detection. |
+| `tokenizer` | [`tokenizer.cpp`](tokenizer.cpp) | `Tokenizer::from_file`, encode / decode roundtrip (ASCII + UTF-8), streaming single-token decode, `id_to_piece` ⇄ `piece_to_id`, special-token detection, `apply_chat_template` (ChatML rendering, default vs explicit system, `add_generation_prompt` toggle, tool-call / tool-response roundtrip, error paths, template override). |
 | `vision`    | [`vision.cpp`](vision.cpp)       | `round_by_factor`, `ceil_by_factor`, `floor_by_factor`, `smart_resize` invariants. Built only when `GENIEXPROC_ENABLE_VISION=ON`. |
 | `processor` | [`processor.cpp`](processor.cpp) | `Role` / `role_to_string`, `kDefaultImageMarker`, `Qwen2VLProcessor::{create, tokenizer, apply_chat_template, process}`, image-marker override, `ChatMessage`/`MMContent` handling, end-to-end `process()` with a runtime-generated PNG. Built only when `GENIEXPROC_ENABLE_VISION=ON`. |
 
@@ -32,10 +32,16 @@ below). Tests in them are skipped (not failed) if the fixture is missing.
 one on the first configure (`Qwen/Qwen2.5-0.5B`, ~7 MB) into
 `build/tests/fixtures/` and caches it.
 
-To use a local file instead (e.g. air-gapped build):
+The chat-template suite in `tokenizer` additionally needs
+`tokenizer_config.json` from the same model (downloaded the same way to
+the same directory). Skipped at runtime if missing.
+
+To use local files instead (e.g. air-gapped build):
 
 ```pwsh
-cmake -B build -DGENIEXPROC_TEST_TOKENIZER="C:\path\to\tokenizer.json" ...
+cmake -B build `
+      -DGENIEXPROC_TEST_TOKENIZER="C:\path\to\tokenizer.json" `
+      -DGENIEXPROC_TEST_TOKENIZER_CONFIG="C:\path\to\tokenizer_config.json" ...
 ```
 
 If the download fails and no override is set, the affected test cases

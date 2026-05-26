@@ -9,11 +9,7 @@
 //
 // For LLM use, create directly via from_file().
 // For VLM/Omni use, obtain via Processor::tokenizer().
-//
-// Usage:
-//   auto tokenizer = geniex::Tokenizer::from_file("tokenizer.json");
-//   auto ids  = tokenizer->encode("Hello world");
-//   auto text = tokenizer->decode(ids);
+
 
 #include <memory>
 #include <string>
@@ -28,10 +24,16 @@ class GENIEXPROC_API Tokenizer {
 public:
     /**
      * @brief Create a Tokenizer from a tokenizer.json file path.
-     * @param path Path to tokenizer.json (HuggingFace format).
-     * @throws std::runtime_error if the file cannot be loaded.
+     * @param tokenizer_path Path to tokenizer.json (HuggingFace format).
+     * @param tokenizer_config_path Optional path to tokenizer_config.json.
+     *        When provided, the chat template (and bos/eos token strings)
+     *        are loaded so apply_chat_template() can render prompts.
+     *        When empty, apply_chat_template() throws.
+     * @throws std::runtime_error if a provided file cannot be loaded or parsed.
      */
-    static std::unique_ptr<Tokenizer> from_file(const std::string& path);
+    static std::unique_ptr<Tokenizer> from_file(
+        const std::string& tokenizer_path,
+        const std::string& tokenizer_config_path = "");
 
     ~Tokenizer();
 
@@ -68,17 +70,47 @@ public:
      */
     std::string decode_token(int32_t token_id, bool stream_safe_utf8 = true) const;
 
-    /**
-     * @brief Apply the model's chat template and return the formatted string.
-     *
-     * NOTE: Not yet supported on the base Tokenizer. Each model has its own
-     * template logic; use the model-specific Processor instead, or format
-     * the prompt string manually.
-     *
-     * @throws std::runtime_error always — not yet implemented.
-     */
-    std::string apply_chat_template(const std::vector<ChatMessage>& messages,
-                                    bool add_generation_prompt = true) const;
+    // Per-call options for apply_chat_template(). Mirrors the most-used
+    // flags of HuggingFace's PreTrainedTokenizerBase.apply_chat_template().
+    //
+    // tools_json / extra_context_json are JSON-serialized strings (not
+    // parsed values) so the public header stays free of nlohmann::json.
+    struct ApplyChatTemplateOptions {
+        // Append the assistant header so the model can start its reply.
+        bool add_generation_prompt = true;
+
+        // Override the template loaded from tokenizer_config.json. Empty
+        // = use the loaded template. The override still uses the loaded
+        // bos/eos token strings.
+        std::string chat_template_override;
+
+        // OpenAI-style tools array, JSON-serialized. Empty = no tools.
+        // Schema:
+        //   [{"type":"function","function":{"name":...,"description":...,
+        //     "parameters":{...JSON Schema...}}}, ...]
+        std::string tools_json;
+
+        // Free-form Jinja context for model-specific switches such as
+        // `enable_thinking` (Qwen3) or `reasoning_effort` (Mistral4).
+        // JSON-serialized object. Empty = no extras.
+        std::string extra_context_json;
+    };
+
+    // True iff a tokenizer_config.json with a non-empty `chat_template`
+    // field was loaded.
+    bool has_chat_template() const noexcept;
+
+    // Render the loaded chat template against `messages` and return the
+    // formatted prompt string.
+    //
+    // Throws std::runtime_error when:
+    //   - has_chat_template() is false,
+    //   - tools_json / extra_context_json / a ToolCall::arguments_json
+    //     fails to parse,
+    //   - the underlying Jinja template fails to render.
+    std::string apply_chat_template(
+        const std::vector<ChatMessage>& messages,
+        const ApplyChatTemplateOptions& opts = {}) const;
 
     /**
      * @brief Check if a token ID is an end-of-generation token.
@@ -102,7 +134,8 @@ public:
     int32_t token_pad() const;
 
 private:
-    explicit Tokenizer(const std::string& path);
+    Tokenizer(const std::string& tokenizer_path,
+              const std::string& tokenizer_config_path);
 
     // pimpl — hides tokenizers_cpp.h and geniex_vocab_interface
     struct Impl;

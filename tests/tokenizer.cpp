@@ -246,3 +246,198 @@ TEST_F(TokenizerTest, DecodeTokenStreamSafeAsciiMatchesPlainText) {
     for (int32_t id : ids) rebuilt += tok_->decode_token(id);
     EXPECT_EQ(rebuilt, text);
 }
+
+// ─── Chat template ──────────────────────────────────────────────────────────
+// Exercised against the Qwen2.5-0.5B tokenizer_config.json fixture downloaded
+// by tests/CMakeLists.txt. Skips at runtime if the fixture is missing.
+
+namespace {
+
+class ChatTemplateTest : public ::testing::Test {
+protected:
+    static std::unique_ptr<geniex::Tokenizer> tok_;
+
+    static void SetUpTestSuite() {
+        const fs::path tok_path = GENIEXPROC_TEST_TOKENIZER_PATH;
+        const fs::path cfg_path = GENIEXPROC_TEST_TOKENIZER_CONFIG_PATH;
+        if (!fs::exists(tok_path) || !fs::exists(cfg_path)) {
+            GTEST_SKIP() << "Chat-template fixtures not present "
+                         << "(tokenizer.json / tokenizer_config.json).";
+        }
+        tok_ = geniex::Tokenizer::from_file(tok_path.string(), cfg_path.string());
+        ASSERT_NE(tok_, nullptr);
+    }
+
+    static void TearDownTestSuite() { tok_.reset(); }
+};
+
+std::unique_ptr<geniex::Tokenizer> ChatTemplateTest::tok_{};
+
+}  // namespace
+
+TEST(ChatTemplateLoadingTest, NoTemplateWhenConfigPathEmpty) {
+    const fs::path tok_path = GENIEXPROC_TEST_TOKENIZER_PATH;
+    if (!fs::exists(tok_path)) GTEST_SKIP() << "tokenizer.json fixture missing";
+
+    auto tok = geniex::Tokenizer::from_file(tok_path.string());
+    ASSERT_NE(tok, nullptr);
+    EXPECT_FALSE(tok->has_chat_template());
+    EXPECT_THROW(tok->apply_chat_template({{geniex::Role::User, "hi"}}),
+                 std::runtime_error);
+}
+
+TEST(ChatTemplateLoadingTest, MissingConfigFileThrows) {
+    const fs::path tok_path = GENIEXPROC_TEST_TOKENIZER_PATH;
+    if (!fs::exists(tok_path)) GTEST_SKIP() << "tokenizer.json fixture missing";
+
+    EXPECT_THROW(
+        geniex::Tokenizer::from_file(tok_path.string(),
+                                     "/definitely/does/not/exist.json"),
+        std::runtime_error);
+}
+
+TEST_F(ChatTemplateTest, HasTemplateWhenConfigPathProvided) {
+    ASSERT_NE(tok_, nullptr);
+    EXPECT_TRUE(tok_->has_chat_template());
+}
+
+TEST_F(ChatTemplateTest, RendersDefaultSystemPrompt) {
+    ASSERT_NE(tok_, nullptr);
+
+    // Qwen2.5's template injects "You are a helpful assistant." when no
+    // explicit system message is given.
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::User, "Hi"},
+    };
+    const auto out = tok_->apply_chat_template(msgs);
+    EXPECT_NE(out.find("<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"),
+              std::string::npos) << out;
+    EXPECT_NE(out.find("<|im_start|>user\nHi<|im_end|>\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("<|im_start|>assistant\n"), std::string::npos) << out;
+}
+
+TEST_F(ChatTemplateTest, RespectsExplicitSystem) {
+    ASSERT_NE(tok_, nullptr);
+
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::System, "You are a pirate."},
+        {geniex::Role::User,   "Hi"},
+    };
+    const auto out = tok_->apply_chat_template(msgs);
+    EXPECT_NE(out.find("<|im_start|>system\nYou are a pirate.<|im_end|>\n"),
+              std::string::npos) << out;
+    // Default fallback must NOT appear when an explicit system was given.
+    EXPECT_EQ(out.find("You are a helpful assistant."), std::string::npos) << out;
+}
+
+TEST_F(ChatTemplateTest, AddGenerationPromptToggle) {
+    ASSERT_NE(tok_, nullptr);
+
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::User, "Hi"},
+    };
+
+    geniex::Tokenizer::ApplyChatTemplateOptions on;
+    on.add_generation_prompt = true;
+    const auto with_prompt = tok_->apply_chat_template(msgs, on);
+
+    geniex::Tokenizer::ApplyChatTemplateOptions off;
+    off.add_generation_prompt = false;
+    const auto without_prompt = tok_->apply_chat_template(msgs, off);
+
+    EXPECT_NE(with_prompt.length(), without_prompt.length());
+    EXPECT_TRUE(with_prompt.size() > without_prompt.size()) << with_prompt;
+    // The trailing assistant header is what the flag toggles.
+    EXPECT_TRUE(with_prompt.rfind("<|im_start|>assistant\n") + 22 == with_prompt.size())
+        << with_prompt;
+}
+
+TEST_F(ChatTemplateTest, ToolCallRoundtrip) {
+    ASSERT_NE(tok_, nullptr);
+
+    geniex::ChatMessage assistant_call;
+    assistant_call.role = geniex::Role::Assistant;
+    assistant_call.tool_calls.push_back(
+        geniex::ToolCall{
+            /*id=*/"call_1",
+            /*name=*/"get_weather",
+            /*arguments_json=*/"{\"location\":\"Paris\"}"});
+
+    geniex::ChatMessage tool_response;
+    tool_response.role         = geniex::Role::Tool;
+    tool_response.tool_call_id = "call_1";
+    tool_response.name         = "get_weather";
+    tool_response.content      = "22C";
+
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::User, "What's the weather?"},
+        assistant_call,
+        tool_response,
+    };
+
+    geniex::Tokenizer::ApplyChatTemplateOptions opts;
+    opts.tools_json =
+        R"([{"type":"function","function":{"name":"get_weather",)"
+        R"("description":"Look up the weather.","parameters":)"
+        R"({"type":"object","properties":{"location":{"type":"string"}},)"
+        R"("required":["location"]}}}])";
+
+    const auto out = tok_->apply_chat_template(msgs, opts);
+
+    EXPECT_NE(out.find("<tools>"),         std::string::npos) << out;
+    EXPECT_NE(out.find("get_weather"),     std::string::npos) << out;
+    EXPECT_NE(out.find("<tool_call>"),     std::string::npos) << out;
+    EXPECT_NE(out.find("\"location\""),    std::string::npos) << out;
+    EXPECT_NE(out.find("<tool_response>\n22C\n</tool_response>"),
+              std::string::npos) << out;
+}
+
+TEST_F(ChatTemplateTest, InvalidArgumentsJsonThrows) {
+    ASSERT_NE(tok_, nullptr);
+
+    geniex::ChatMessage assistant_call;
+    assistant_call.role = geniex::Role::Assistant;
+    assistant_call.tool_calls.push_back(
+        geniex::ToolCall{"id1", "f", "definitely-not-json"});
+
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::User, "Hi"},
+        assistant_call,
+    };
+
+    try {
+        tok_->apply_chat_template(msgs);
+        FAIL() << "expected std::runtime_error";
+    } catch (const std::runtime_error& e) {
+        const std::string what = e.what();
+        EXPECT_NE(what.find("messages[1]"),    std::string::npos) << what;
+        EXPECT_NE(what.find("arguments_json"), std::string::npos) << what;
+    }
+}
+
+TEST_F(ChatTemplateTest, InvalidToolsJsonThrows) {
+    ASSERT_NE(tok_, nullptr);
+
+    geniex::Tokenizer::ApplyChatTemplateOptions opts;
+    opts.tools_json = "not-json";
+
+    EXPECT_THROW(
+        tok_->apply_chat_template({{geniex::Role::User, "Hi"}}, opts),
+        std::runtime_error);
+}
+
+TEST_F(ChatTemplateTest, ChatTemplateOverride) {
+    ASSERT_NE(tok_, nullptr);
+
+    geniex::Tokenizer::ApplyChatTemplateOptions opts;
+    opts.add_generation_prompt   = false;
+    opts.chat_template_override =
+        "{% for m in messages %}{{ m.role }}:{{ m.content }}\n{% endfor %}";
+
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::User,      "ping"},
+        {geniex::Role::Assistant, "pong"},
+    };
+    const auto out = tok_->apply_chat_template(msgs, opts);
+    EXPECT_EQ(out, "user:ping\nassistant:pong\n");
+}

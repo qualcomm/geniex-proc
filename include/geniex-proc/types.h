@@ -136,6 +136,7 @@ enum class Role {
     System,
     User,
     Assistant,
+    Tool,
 };
 
 /// Returns the string representation of a Role
@@ -144,6 +145,7 @@ inline const char* role_to_string(Role role) {
         case Role::System:    return "system";
         case Role::User:      return "user";
         case Role::Assistant: return "assistant";
+        case Role::Tool:      return "tool";
     }
     return "unknown";
 }
@@ -161,10 +163,35 @@ struct MMContent {
     std::string path;
 };
 
+struct ToolCall {
+    std::string id;
+    std::string name;
+    std::string arguments_json;
+};
+
 struct ChatMessage {
     Role        role    = Role::User;
     std::string content;
-    std::vector<MMContent> mm_content;  // optional multimodal attachments
+
+    // Multimodal attachments. Consumed by VLM/Omni Processors;
+    // Tokenizer::apply_chat_template() ignores them.
+    std::vector<MMContent> mm_content;
+
+    // Tool calls issued on a prior `Assistant` turn.
+    std::vector<ToolCall> tool_calls;
+
+    // Links a `Tool` response back to `tool_calls[i].id`. Required by
+    // some templates (Mistral, Cohere, GPT-OSS).
+    std::string tool_call_id;
+
+    // Function name on `Tool` responses. Required by some templates
+    // (Llama 3.1, EXAONE).
+    std::string name;
+
+    // Separate reasoning stream on `Assistant` turns, so reasoning
+    // models (Qwen3, DeepSeek-R1, Gemma 4, EXAONE 4) see their own prior
+    // chain-of-thought without it bleeding into `content`.
+    std::string reasoning_content;
 };
 
 // ============================================================
