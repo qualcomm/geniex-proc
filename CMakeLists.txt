@@ -47,7 +47,7 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
+    ${CMAKE_CURRENT_SOURCE_DIR}/third-party
 )
 
 find_package(OpenBLAS QUIET)
@@ -55,10 +55,10 @@ if(OpenBLAS_FOUND)
     message(STATUS "geniex-proc: OpenBLAS found")
 endif()
 
-add_subdirectory(third_party/xtl)
-add_subdirectory(third_party/xtensor)
-add_subdirectory(third_party/xtensor-io)
-add_subdirectory(third_party/xtensor-blas)
+add_subdirectory(third-party/xtl)
+add_subdirectory(third-party/xtensor)
+add_subdirectory(third-party/xtensor-io)
+add_subdirectory(third-party/xtensor-blas)
 
 if(OpenBLAS_FOUND)
     target_compile_definitions(xtensor-blas INTERFACE WITH_OPENBLAS)
@@ -69,10 +69,21 @@ if(OpenBLAS_FOUND)
     endif()
 endif()
 
-add_subdirectory(third_party/tokenizers-cpp)
+add_subdirectory(third-party/tokenizers-cpp)
 include_directories(
-    third_party/tokenizers-cpp/include
+    third-party/tokenizers-cpp/include
 )
+
+# minja is header-only. We avoid add_subdirectory(third-party/minja) because
+# its CMakeLists FetchContents nlohmann/json (we already vendor v3.12.0 at
+# include/json.hpp, re-exported as <nlohmann/json.hpp>) and builds gtest /
+# fuzztest / examples we don't need. Linked PRIVATELY below so neither minja
+# nor nlohmann headers leak through geniex-proc's public include surface.
+add_library(geniexproc_minja INTERFACE)
+target_include_directories(geniexproc_minja INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/third-party/minja/include
+)
+target_compile_features(geniexproc_minja INTERFACE cxx_std_17)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper macro: configure common properties shared by all three libs
@@ -97,7 +108,7 @@ macro(geniexproc_configure_target TARGET_NAME)
     target_include_directories(${TARGET_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/geniex-sampling
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tokenizers-cpp/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/tokenizers-cpp/include
     )
 endmacro()
 
@@ -107,6 +118,7 @@ endmacro()
 message(STATUS "geniex-proc: Building core library (${_GENIEXPROC_LIB_TYPE})")
 add_library(geniex-proc ${_GENIEXPROC_LIB_TYPE}
     src/tokenizer/tokenizer.cpp
+    src/tokenizer/tokenizer_config.cpp
     src/sampler/sampler.cpp
     src/geniex-sampling/geniex-sampling.cpp
     src/geniex-sampling/geniex-grammar.cpp
@@ -121,6 +133,8 @@ target_link_libraries(geniex-proc PUBLIC
     xtensor-io
     xtensor-blas
 )
+# Private — minja and nlohmann must not appear in geniex-proc's public headers.
+target_link_libraries(geniex-proc PRIVATE geniexproc_minja)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # geniex-proc-vision  —  image processing
@@ -136,7 +150,7 @@ if(GENIEXPROC_ENABLE_VISION)
     )
     geniexproc_configure_target(geniex-proc-vision)
     target_include_directories(geniex-proc-vision PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
+        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/stb
     )
     # Propagate the flag so consumers can #ifdef on it
     target_compile_definitions(geniex-proc-vision PUBLIC GENIEXPROC_ENABLE_VISION)

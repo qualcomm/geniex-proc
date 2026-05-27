@@ -42,6 +42,35 @@ if(NOT EXISTS "${GENIEXPROC_TEST_TOKENIZER}")
     endif()
 endif()
 
+# Companion fixture for the chat-template tests. Same model, same repo, so a
+# missing download leaves only the chat-template suite skipping at runtime.
+set(_DEFAULT_TOKENIZER_CONFIG_URL
+    "https://huggingface.co/Qwen/Qwen2.5-0.5B/resolve/main/tokenizer_config.json")
+set(_DEFAULT_TOKENIZER_CONFIG_FILE
+    "${CMAKE_CURRENT_BINARY_DIR}/fixtures/tokenizer_config.json")
+
+set(GENIEXPROC_TEST_TOKENIZER_CONFIG "${_DEFAULT_TOKENIZER_CONFIG_FILE}"
+    CACHE FILEPATH "tokenizer_config.json used by chat-template unit tests")
+
+if(NOT EXISTS "${GENIEXPROC_TEST_TOKENIZER_CONFIG}")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/fixtures")
+    message(STATUS "Downloading test tokenizer_config: ${_DEFAULT_TOKENIZER_CONFIG_URL}")
+    file(DOWNLOAD
+        "${_DEFAULT_TOKENIZER_CONFIG_URL}"
+        "${_DEFAULT_TOKENIZER_CONFIG_FILE}"
+        SHOW_PROGRESS
+        STATUS _DL_STATUS
+        TIMEOUT 60)
+    list(GET _DL_STATUS 0 _DL_CODE)
+    if(NOT _DL_CODE EQUAL 0)
+        list(GET _DL_STATUS 1 _DL_MSG)
+        message(WARNING
+            "Failed to download test tokenizer_config (${_DL_MSG}). "
+            "Chat-template tests will skip at run time. "
+            "Download manually or pass -DGENIEXPROC_TEST_TOKENIZER_CONFIG=<path>.")
+    endif()
+endif()
+
 # ── Helper: add one test binary ──────────────────────────────────────────────
 function(geniexproc_add_test NAME)
     add_executable(${NAME} ${ARGN})
@@ -51,6 +80,7 @@ function(geniexproc_add_test NAME)
     )
     target_compile_definitions(${NAME} PRIVATE
         GENIEXPROC_TEST_TOKENIZER_PATH="${GENIEXPROC_TEST_TOKENIZER}"
+        GENIEXPROC_TEST_TOKENIZER_CONFIG_PATH="${GENIEXPROC_TEST_TOKENIZER_CONFIG}"
     )
     set_target_properties(${NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
@@ -73,12 +103,12 @@ if(GENIEXPROC_ENABLE_VISION)
     )
     target_include_directories(vision PRIVATE
         ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/third_party/stb
+        ${CMAKE_SOURCE_DIR}/third-party/stb
     )
 
     geniexproc_add_test(processor processor.cpp)
     target_link_libraries(processor PRIVATE geniex-proc-vision)
     target_include_directories(processor PRIVATE
-        ${CMAKE_SOURCE_DIR}/third_party/stb
+        ${CMAKE_SOURCE_DIR}/third-party/stb
     )
 endif()
