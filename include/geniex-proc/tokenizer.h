@@ -20,8 +20,36 @@
 
 namespace geniex {
 
+// Per-call options for Tokenizer::apply_chat_template(), mirroring HuggingFace's
+// PreTrainedTokenizerBase.apply_chat_template(). JSON fields are kept as strings
+// so this header stays free of nlohmann::json.
+//
+// At namespace scope rather than nested in Tokenizer: the `= {}` default on
+// apply_chat_template() needs the NSDMI for `add_generation_prompt`, which
+// Clang rejects while the enclosing class is still incomplete.
+struct GENIEXPROC_API ApplyChatTemplateOptions {
+    // Append the assistant header so the model can start its reply.
+    bool add_generation_prompt = true;
+
+    // Overrides the template loaded from tokenizer_config.json; empty = use
+    // the loaded template. Loaded bos/eos strings are still used.
+    std::string chat_template_override;
+
+    // OpenAI-style tools array, JSON-serialized; empty = no tools.
+    //   [{"type":"function","function":{"name":...,"description":...,
+    //     "parameters":{...JSON Schema...}}}, ...]
+    std::string tools_json;
+
+    // JSON-serialized Jinja context for model-specific switches such as
+    // `enable_thinking` (Qwen3) or `reasoning_effort` (Mistral4).
+    std::string extra_context_json;
+};
+
 class GENIEXPROC_API Tokenizer {
 public:
+    // Compatibility alias for callers spelled `Tokenizer::ApplyChatTemplateOptions`.
+    using ApplyChatTemplateOptions = ::geniex::ApplyChatTemplateOptions;
+
     /**
      * @brief Create a Tokenizer from a tokenizer.json file path.
      * @param tokenizer_path Path to tokenizer.json (HuggingFace format).
@@ -69,32 +97,6 @@ public:
      *        When false: byte-identical to `decode({token_id})`.
      */
     std::string decode_token(int32_t token_id, bool stream_safe_utf8 = true) const;
-
-    // Per-call options for apply_chat_template(). Mirrors the most-used
-    // flags of HuggingFace's PreTrainedTokenizerBase.apply_chat_template().
-    //
-    // tools_json / extra_context_json are JSON-serialized strings (not
-    // parsed values) so the public header stays free of nlohmann::json.
-    struct ApplyChatTemplateOptions {
-        // Append the assistant header so the model can start its reply.
-        bool add_generation_prompt = true;
-
-        // Override the template loaded from tokenizer_config.json. Empty
-        // = use the loaded template. The override still uses the loaded
-        // bos/eos token strings.
-        std::string chat_template_override;
-
-        // OpenAI-style tools array, JSON-serialized. Empty = no tools.
-        // Schema:
-        //   [{"type":"function","function":{"name":...,"description":...,
-        //     "parameters":{...JSON Schema...}}}, ...]
-        std::string tools_json;
-
-        // Free-form Jinja context for model-specific switches such as
-        // `enable_thinking` (Qwen3) or `reasoning_effort` (Mistral4).
-        // JSON-serialized object. Empty = no extras.
-        std::string extra_context_json;
-    };
 
     // True iff a tokenizer_config.json with a non-empty `chat_template`
     // field was loaded.
