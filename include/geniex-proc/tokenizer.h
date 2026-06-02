@@ -35,10 +35,17 @@ struct GENIEXPROC_API ApplyChatTemplateOptions {
     // the loaded template. Loaded bos/eos strings are still used.
     std::string chat_template_override;
 
-    // OpenAI-style tools array, JSON-serialized; empty = no tools.
+    // `tools_json`, when non-empty, takes precedence over `tools` and is
+    // forwarded to the template verbatim after parse-validation. Use it
+    // when the JSON is already on hand (FFI / HTTP boundary) to avoid a
+    // JSON-struct-JSON round trip; use `tools` when constructing
+    // definitions in C++.
+    //
+    // Wire shape (whichever form is used):
     //   [{"type":"function","function":{"name":...,"description":...,
     //     "parameters":{...JSON Schema...}}}, ...]
-    std::string tools_json;
+    std::vector<ChatTool> tools;
+    std::string           tools_json;
 
     // JSON-serialized Jinja context for model-specific switches such as
     // `enable_thinking` (Qwen3) or `reasoning_effort` (Mistral4).
@@ -107,8 +114,8 @@ public:
     //
     // Throws std::runtime_error when:
     //   - has_chat_template() is false,
-    //   - tools_json / extra_context_json / a ToolCall::arguments_json
-    //     fails to parse,
+    //   - tools_json / extra_context_json / a ChatTool::parameters_json
+    //     / a ToolCall::arguments_json fails to parse,
     //   - the underlying Jinja template fails to render.
     std::string apply_chat_template(
         const std::vector<ChatMessage>& messages,

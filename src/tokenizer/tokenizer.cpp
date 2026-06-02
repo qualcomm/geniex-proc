@@ -129,6 +129,38 @@ ordered_json parse_optional_json(const std::string& s, const char* field_name) {
     }
 }
 
+// Resolves the two-form tool input on ApplyChatTemplateOptions into the
+// JSON value minja's chat_template_inputs::tools expects. `tools_json`
+// wins when non-empty so callers that already hold OpenAI-shaped JSON
+// (FFI / HTTP) skip the round trip through ChatTool.
+ordered_json build_tools_json(const ApplyChatTemplateOptions& opts) {
+    if (!opts.tools_json.empty()) {
+        return parse_optional_json(opts.tools_json, "tools_json");
+    }
+    if (opts.tools.empty()) {
+        return ordered_json();
+    }
+    ordered_json out = ordered_json::array();
+    for (const auto& t : opts.tools) {
+        ordered_json fn;
+        fn["name"]        = t.name;
+        fn["description"] = t.description;
+        if (t.parameters_json.empty()) {
+            fn["parameters"] = ordered_json::object();
+        } else {
+            try {
+                fn["parameters"] = ordered_json::parse(t.parameters_json);
+            } catch (const std::exception& e) {
+                throw std::runtime_error(
+                    "geniex::Tokenizer::apply_chat_template: tools[" + t.name
+                    + "].parameters_json failed to parse: " + e.what());
+            }
+        }
+        out.push_back({{"type", "function"}, {"function", std::move(fn)}});
+    }
+    return out;
+}
+
 // Converts one ChatMessage into the dict shape HF chat templates index into:
 // `role`, `content`, and the tool/reasoning fields when set.
 ordered_json message_to_json(const ChatMessage& m, std::size_t index) {
@@ -191,7 +223,7 @@ std::string Tokenizer::apply_chat_template(
 
     minja::chat_template_inputs inputs;
     inputs.messages              = std::move(messages_json);
-    inputs.tools                 = parse_optional_json(opts.tools_json,         "tools_json");
+    inputs.tools                 = build_tools_json(opts);
     inputs.extra_context         = parse_optional_json(opts.extra_context_json, "extra_context_json");
     inputs.add_generation_prompt = opts.add_generation_prompt;
 
