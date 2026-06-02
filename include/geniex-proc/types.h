@@ -169,6 +169,20 @@ struct ToolCall {
     std::string arguments_json;
 };
 
+// Definition of a function the model may call this turn. Per-request
+// (companion of the `messages` list, not a per-message field) — contrast
+// with ToolCall, which records a function the model already invoked on
+// a prior assistant turn.
+//
+// `parameters_json` is a JSON Schema value, spliced into the chat
+// template verbatim; empty is treated as `{}`.
+struct ChatTool {
+    std::string name;
+    std::string description;
+    std::string parameters_json;
+};
+using ChatTools = std::vector<ChatTool>;
+
 struct ChatMessage {
     Role        role    = Role::User;
     std::string content;

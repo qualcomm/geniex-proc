@@ -375,12 +375,14 @@ TEST_F(ChatTemplateTest, ToolCallRoundtrip) {
         tool_response,
     };
 
+    // Exercises the typed `tools` path (vs the raw `tools_json` path
+    // covered by ToolsJsonOverridesTypedTools).
     geniex::Tokenizer::ApplyChatTemplateOptions opts;
-    opts.tools_json =
-        R"([{"type":"function","function":{"name":"get_weather",)"
-        R"("description":"Look up the weather.","parameters":)"
-        R"({"type":"object","properties":{"location":{"type":"string"}},)"
-        R"("required":["location"]}}}])";
+    opts.tools.push_back(geniex::ChatTool{
+        /*name=*/"get_weather",
+        /*description=*/"Look up the weather.",
+        /*parameters_json=*/
+        R"({"type":"object","properties":{"location":{"type":"string"}},"required":["location"]})"});
 
     const auto out = tok_->apply_chat_template(msgs, opts);
 
@@ -424,6 +426,46 @@ TEST_F(ChatTemplateTest, InvalidToolsJsonThrows) {
     EXPECT_THROW(
         tok_->apply_chat_template({{geniex::Role::User, "Hi"}}, opts),
         std::runtime_error);
+}
+
+TEST_F(ChatTemplateTest, InvalidToolParametersJsonThrows) {
+    ASSERT_NE(tok_, nullptr);
+
+    geniex::Tokenizer::ApplyChatTemplateOptions opts;
+    opts.tools.push_back(geniex::ChatTool{
+        /*name=*/"broken_tool",
+        /*description=*/"",
+        /*parameters_json=*/"not-json"});
+
+    try {
+        tok_->apply_chat_template({{geniex::Role::User, "Hi"}}, opts);
+        FAIL() << "expected std::runtime_error";
+    } catch (const std::runtime_error& e) {
+        const std::string what = e.what();
+        // The error must name the offending tool so callers can locate it.
+        EXPECT_NE(what.find("broken_tool"),     std::string::npos) << what;
+        EXPECT_NE(what.find("parameters_json"), std::string::npos) << what;
+    }
+}
+
+TEST_F(ChatTemplateTest, ToolsJsonOverridesTypedTools) {
+    ASSERT_NE(tok_, nullptr);
+
+    // Both fields populated with disjoint tool names; tools_json must win.
+    geniex::Tokenizer::ApplyChatTemplateOptions opts;
+    opts.tools.push_back(geniex::ChatTool{
+        /*name=*/"typed_tool",
+        /*description=*/"From the struct.",
+        /*parameters_json=*/"{}"});
+    opts.tools_json =
+        R"([{"type":"function","function":{"name":"json_tool",)"
+        R"("description":"From the JSON string.","parameters":{}}}])";
+
+    const auto out = tok_->apply_chat_template(
+        {{geniex::Role::User, "Hi"}}, opts);
+
+    EXPECT_NE(out.find("json_tool"),  std::string::npos) << out;
+    EXPECT_EQ(out.find("typed_tool"), std::string::npos) << out;
 }
 
 TEST_F(ChatTemplateTest, ChatTemplateOverride) {
