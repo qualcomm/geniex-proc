@@ -56,9 +56,9 @@ struct Tokenizer::Impl {
                 // the template several times against dummy contexts; do it
                 // once at load time and cache the result.
                 chat_template = std::make_unique<minja::chat_template>(
-                    std::move(cfg.chat_template),
-                    std::move(cfg.bos_token),
-                    std::move(cfg.eos_token));
+                    cfg.chat_template,
+                    cfg.bos_token,
+                    cfg.eos_token);
             }
         }
     }
@@ -224,8 +224,14 @@ std::string Tokenizer::apply_chat_template(
     minja::chat_template_inputs inputs;
     inputs.messages              = std::move(messages_json);
     inputs.tools                 = build_tools_json(opts);
-    inputs.extra_context         = parse_optional_json(opts.extra_context_json, "extra_context_json");
     inputs.add_generation_prompt = opts.add_generation_prompt;
+
+    // extra_context_json provides the base; typed fields take precedence.
+    ordered_json extra = opts.extra_context_json.empty()
+        ? ordered_json::object()
+        : parse_optional_json(opts.extra_context_json, "extra_context_json");
+    extra["enable_thinking"] = opts.enable_thinking;
+    inputs.extra_context = std::move(extra);
 
     try {
         if (!opts.chat_template_override.empty()) {

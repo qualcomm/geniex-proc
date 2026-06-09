@@ -47,8 +47,13 @@ struct GENIEXPROC_API ApplyChatTemplateOptions {
     std::vector<ChatTool> tools;
     std::string           tools_json;
 
-    // JSON-serialized Jinja context for model-specific switches such as
-    // `enable_thinking` (Qwen3) or `reasoning_effort` (Mistral4).
+    // Request thinking/reasoning mode. When true, the model will produce
+    // a reasoning trace before its final answer. Has no effect on models
+    // whose chat template does not support this feature.
+    bool enable_thinking = false;
+
+    // Arbitrary extra Jinja context variables as a JSON object string.
+    // Merged with (and takes precedence over) the fields above.
     std::string extra_context_json;
 };
 
