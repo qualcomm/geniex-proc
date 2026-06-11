@@ -113,17 +113,17 @@ int main(void) {
 
 Now, we note how to add the library, in your main project, `CMakeLists.txt`, we can add
 ```cmake
-add_subdirectory(third_party/xtl)
-add_subdirectory(third_party/xtensor)
-include_directories(${CMAKE_SOURCE_DIR}/third_party/xtensor/include)
-include_directories(${CMAKE_SOURCE_DIR}/third_party/xtl/include)
+add_subdirectory(third-party/xtl)
+add_subdirectory(third-party/xtensor)
+include_directories(${CMAKE_SOURCE_DIR}/third-party/xtensor/include)
+include_directories(${CMAKE_SOURCE_DIR}/third-party/xtl/include)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-set(xtensor_DIR ${CMAKE_BINARY_DIR}/third_party/xtensor)
-set(xtl_DIR ${CMAKE_BINARY_DIR}/third_party/xtl)
+set(xtensor_DIR ${CMAKE_BINARY_DIR}/third-party/xtensor)
+set(xtl_DIR ${CMAKE_BINARY_DIR}/third-party/xtl)
 ```
 
 And inside the example, or the object folder's CMakeLists.txt, we can add

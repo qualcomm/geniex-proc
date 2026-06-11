@@ -136,6 +136,7 @@ enum class Role {
     System,
     User,
     Assistant,
+    Tool,
 };
 
 /// Returns the string representation of a Role
@@ -144,6 +145,7 @@ inline const char* role_to_string(Role role) {
         case Role::System:    return "system";
         case Role::User:      return "user";
         case Role::Assistant: return "assistant";
+        case Role::Tool:      return "tool";
     }
     return "unknown";
 }
@@ -161,10 +163,49 @@ struct MMContent {
     std::string path;
 };
 
+struct ToolCall {
+    std::string id;
+    std::string name;
+    std::string arguments_json;
+};
+
+// Definition of a function the model may call this turn. Per-request
+// (companion of the `messages` list, not a per-message field) — contrast
+// with ToolCall, which records a function the model already invoked on
+// a prior assistant turn.
+//
+// `parameters_json` is a JSON Schema value, spliced into the chat
+// template verbatim; empty is treated as `{}`.
+struct ChatTool {
+    std::string name;
+    std::string description;
+    std::string parameters_json;
+};
+using ChatTools = std::vector<ChatTool>;
+
 struct ChatMessage {
     Role        role    = Role::User;
     std::string content;
-    std::vector<MMContent> mm_content;  // optional multimodal attachments
+
+    // Multimodal attachments. Consumed by VLM/Omni Processors;
+    // Tokenizer::apply_chat_template() ignores them.
+    std::vector<MMContent> mm_content;
+
+    // Tool calls issued on a prior `Assistant` turn.
+    std::vector<ToolCall> tool_calls;
+
+    // Links a `Tool` response back to `tool_calls[i].id`. Required by
+    // some templates (Mistral, Cohere, GPT-OSS).
+    std::string tool_call_id;
+
+    // Function name on `Tool` responses. Required by some templates
+    // (Llama 3.1, EXAONE).
+    std::string name;
+
+    // Separate reasoning stream on `Assistant` turns, so reasoning
+    // models (Qwen3, DeepSeek-R1, Gemma 4, EXAONE 4) see their own prior
+    // chain-of-thought without it bleeding into `content`.
+    std::string reasoning_content;
 };
 
 // ============================================================

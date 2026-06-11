@@ -7,6 +7,9 @@
 
 #include "sampling-vocab.h"
 
+#include "src/internal/token_bytes.h"
+#include "src/internal/utils.h"
+
 #include <tokenizers_cpp.h>
 
 #include <algorithm>
@@ -47,7 +50,7 @@ struct geniex_vocab_tokenizers : public geniex_vocab_interface {
     int token_to_piece(geniex_token token, char* buf, int32_t length, bool special = false) override {
         if (!tokenizer || !buf || length <= 0) return 0;
 
-        std::string piece = tokenizer->IdToToken(token);
+        std::string piece = geniex::internal::token_id_to_raw_bytes(tokenizer, token);
         if (piece.empty()) return 0;
 
         int copy_len = std::min(static_cast<int>(piece.length()), length - 1);
@@ -56,7 +59,9 @@ struct geniex_vocab_tokenizers : public geniex_vocab_interface {
         return copy_len;
     }
 
-    std::string token_to_piece_str(geniex_token token) override { return detokenize({token}); }
+    std::string token_to_piece_str(geniex_token token) override {
+        return geniex::internal::token_id_to_raw_bytes(tokenizer, token);
+    }
 
     std::vector<geniex_token> tokenize(const std::string& text, bool add_special = false,
                                      bool parse_special = false) override {
@@ -412,12 +417,12 @@ struct geniex_vocab_tokenizers : public geniex_vocab_interface {
 
 geniex_vocab_interface* create_geniex_vocab_tokenizers(const std::string& vocab_path) {
     try {
-        auto tokenizer = tokenizers::Tokenizer::FromJSON(vocab_path);
+        auto tokenizer = tokenizers::Tokenizer::FromBlobJSON(read_file_to_string(vocab_path));
         if (!tokenizer) {
             return nullptr;
         }
         return new geniex_vocab_tokenizers(tokenizer.release());
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
         return nullptr;
     }
 }
