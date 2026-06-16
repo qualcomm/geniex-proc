@@ -21,20 +21,11 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Rewrite SSH submodule URLs to HTTPS
-        # .gitmodules uses git@ URLs but Actions authenticates over HTTPS.
-        shell: pwsh
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-
       - name: Checkout (with submodules)
-        # GH_PAT is a fine-grained PAT with Contents:Read on the private
-        # submodule repo (qcom-ai-hub/tokenizers-cpp).
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 1
-          token: ${{ secrets.GH_PAT }}
 
       - name: Install Rust toolchain
         # Required by third-party/tokenizers-cpp (compiles a Rust crate).
