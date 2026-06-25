@@ -126,15 +126,6 @@ Most dependencies are built-in as git submodules. External dependencies needed:
 - **Windows dependencies**: 📖 **See [vcpkg-static.md](vcpkg-static.md)**
 - **macOS OpenMP**: 📖 **See [openmp.md](openmp.md)**
 
-## Build Scripts
-
-The project includes several build scripts in the `scripts/` directory:
-
-- `build-android.sh`: Android cross-compilation
-- `build-linux-arm64.sh`: ARM64 Linux cross-compilation  
-- `build-opencv-*.sh/.ps1`: OpenCV-specific builds
-- `update-dylib-deps.sh`: macOS library dependency management
-
 ## Troubleshooting
 
 ### Common Issues
@@ -171,7 +162,7 @@ After building, you can run the examples to verify functionality:
 - **Custom toolchain**: `-DCMAKE_TOOLCHAIN_FILE=/path/to/toolchain.cmake`
 - **Custom build directory**: `cmake -B my-custom-build`  
 - **Parallel builds**: `cmake --build build -j$(nproc)` (Linux/macOS) or `--parallel` (Windows)
-- **Cross-compilation**: Use scripts in `scripts/` directory
+- **Cross-compilation**: Use a custom toolchain file for the target platform
 
 ## Related Documentation
 
