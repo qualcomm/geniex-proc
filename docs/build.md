@@ -122,7 +122,7 @@ cmake --build build
 Most dependencies are built-in as git submodules. External dependencies needed:
 
 - **Multi-modal processing**: FFTW3, OpenMP, MP3 libraries, and FFmpeg (install via system package manager)
-- **Computer vision**: 📖 **See [build-opencv.md](build-opencv.md)** for OpenCV installation
+- **Computer vision**: OpenCV (install via system package manager or build from source)
 - **Windows dependencies**: 📖 **See [vcpkg-static.md](vcpkg-static.md)**
 - **macOS OpenMP**: 📖 **See [openmp.md](openmp.md)**
 
@@ -177,4 +177,3 @@ After building, you can run the examples to verify functionality:
 
 - 📖 [vcpkg-static.md](vcpkg-static.md) - Windows dependency management  
 - 📖 [openmp.md](openmp.md) - OpenMP setup for macOS
-- 📖 [build-opencv.md](build-opencv.md) - OpenCV build instructions
