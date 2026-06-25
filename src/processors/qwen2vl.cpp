@@ -3,7 +3,7 @@
 //
 // src/processors/qwen2vl.cpp — Qwen2-VL processor implementation.
 //
-// Compiled only when GENIEXPROC_BUILD_QWEN2VL is ON.
+// Compiled only when GENIEXPROC_ENABLE_VISION is ON.
 //
 // Architecture:
 //   Qwen2VLProcessor owns a pimpl (Impl) that holds the Tokenizer and all
