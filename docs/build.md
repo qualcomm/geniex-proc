@@ -29,8 +29,6 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo --version  # verify installation
 ```
 
-📖 **See [examples/hf-tokenizers/README.md](../examples/hf-tokenizers/README.md) for tokenizer usage examples**
-
 ## Build Options
 
 geniex-proc uses CMake options to control which features and modules to build:
