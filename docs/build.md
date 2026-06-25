@@ -38,7 +38,7 @@ geniex-proc uses CMake options to control which features and modules to build:
 ### Core Options
 | Option | Default | Description |
 |--------|---------|-------------|
-| `GENIEXPROC_BUILD_SHARED_LIB` | `OFF` | Build as shared library instead of static |
+| `GENIEXPROC_BUILD_SHARED_LIBS` | `OFF` | Build as shared library instead of static |
 | `GENIEXPROC_BUILD_EXAMPLES` | `ON` | Build example programs |
 | `GENIEXPROC_INSTALL` | `OFF` | Enable installation targets |
 
