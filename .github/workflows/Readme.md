@@ -3,6 +3,6 @@ This folder contains workflows that are helpful for maintaining a smooth and sec
 
 Workflows:
 1. `qcom-preflight-checks.yml` - This workflow runs several preflight checks, including copyright, email, repolinter, and security checks.  See [qualcomm/qcom-actions](https://github.com/qualcomm/qcom-actions)
-2. `stale-issues.yaml` - This workflow will periodically run every 30 days to check for stalled issues and PRs. If the workflow detects any stalled issues and/or PRs, it will automatically leave just a comment to draw attention.
+2. `stale-issues.yaml` - This workflow runs daily to check for stalled issues and PRs. Issues/PRs with no activity for 30 days are marked stale with a comment to draw attention.
 3. `build-check.yml` - On every PR and push to `main`, compiles `geniex-proc` + `geniex-proc-vision` on the GitHub-hosted `windows-latest` runner.
 
