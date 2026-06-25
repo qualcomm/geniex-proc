@@ -6,11 +6,9 @@ A high-performance C++ library for multimodal data preprocessing, designed to ef
 
 | Modality | Libraries | Features |
 |----------|-----------|----------|
-| Image    | [STB Image](https://github.com/nothings/stb) | Resizing, normalization, color conversion |
-| Audio    | *(planned)* [libsndfile](https://github.com/libsndfile/libsndfile), [xtensor-fftw](https://github.com/xtensor-stack/xtensor-fftw), [soxr](https://github.com/dofuuz/soxr) | Resampling, MFCC extraction, spectrograms |
-| Video    | *(planned)* [Decord](https://github.com/dmlc/decord), FFmpeg | Frame extraction, temporal sampling |
+| Image    | [STB Image](https://github.com/nothings/stb) | Loading (JPEG/PNG/BMP/…), bicubic resizing, normalization, patch/tensor construction for VLMs |
 | Text     | [tokenizers-cpp](https://github.com/mlc-ai/tokenizers-cpp), [minja](https://github.com/google/minja) | Tokenization (BPE), chat templates |
-| Tensors  | [xtensor](https://github.com/xtensor-stack/xtensor), [xtl](https://github.com/xtensor-stack/xtl), [xtensor-io](https://github.com/xtensor-stack/xtensor-io), [xtensor-blas](https://github.com/xtensor-stack/xtensor-blas) | General multi-dimensional tensors, linear algebra, npy/npz I/O |
+| Tensors  | [xtensor](https://github.com/xtensor-stack/xtensor), [xtl](https://github.com/xtensor-stack/xtl), [xtensor-io](https://github.com/xtensor-stack/xtensor-io), [xtensor-blas](https://github.com/xtensor-stack/xtensor-blas) | Multi-dimensional tensors, linear algebra, npy/npz I/O |
 
 ## Key Features
 
@@ -37,83 +35,17 @@ geniex-proc is built with a modular architecture. Enable only the features you n
 
 - **Core Library** (`geniex-proc`): Tokenizer + sampler + grammar-constrained sampling (always built)
 - **Vision Library** (`geniex-proc-vision`): Image processing + VLM processors — enable with `-DGENIEXPROC_ENABLE_VISION=ON`
-- **Audio Library** (`geniex-proc-audio`): Audio processing + Omni processors — enable with `-DGENIEXPROC_ENABLE_AUDIO=ON` *(scaffolding only; sources WIP)*
-- **Video Support**: Enable with `-DGENIEXPROC_ENABLE_VIDEO=ON` *(planned)*
 
-Additional build options:
+## Image Preprocessing Pipeline
 
-- `-DGENIEXPROC_BUILD_SHARED_LIBS=ON` — build shared libraries instead of static
-- `-DGENIEXPROC_BUILD_TESTS=ON` — build and register CTest unit tests (uses GoogleTest)
-- `-DGENIEXPROC_INSTALL=ON` — generate install rules
+All image processing is built on top of **[STB Image](https://github.com/nothings/stb)** (single-header C library) and **xtensor**, with no external CV frameworks. The implementation lives in `src/vision/` and `src/processors/`.
 
-## Repository Layout
+The pipeline covers:
+- **Loading**: decodes JPEG/PNG/BMP/… into a `uint8` HWC tensor via `stbi_load`.
+- **Resizing**: bicubic (Catmull-Rom) resize via `stbir_resize`, matching HuggingFace defaults. Includes a `smart_resize` helper that preserves aspect ratio while keeping dimensions divisible by the patch stride and total pixels within a `[min, max]` budget.
+- **Normalization**: cast to `float32`, rescale by `1/255`, then per-channel mean/std subtraction (CLIP defaults) — all vectorized via xtensor views.
+- **Patch/tensor construction** (VLM-specific): HWC → CHW, temporal tiling, reshape into a patch grid, and flatten to `[n_patches, C×T×P×P]` — the `pixel_values` tensor fed to the visual encoder, alongside `image_grid_thw` for positional encoding.
 
-```
-include/
-  geniex-proc.h              Umbrella header
-  geniex-vision.h            Vision umbrella header
-  geniex-audio.h             Audio umbrella header (placeholder)
-  geniex-proc/
-    export.h                 API export macros
-    processor.h              Base processor interface
-    qwen2vl.h                Qwen2-VL processor
-    sampler.h                Sampler
-    tokenizer.h              Tokenizer
-    types.h                  Common types
-
-src/
-  tokenizer/                 Tokenizer + tokenizer config
-  sampler/                   Sampling implementation
-  geniex-sampling/           Grammar-constrained sampling
-  vision/                    Image loading / preprocessing (stb-based)
-  processors/                Model-specific processors (Qwen2-VL, ...)
-  internal/                  Internal utilities
-
-tests/                       GoogleTest unit tests
-third-party/                 Vendored dependencies (xtensor, tokenizers-cpp, minja, stb, ...)
-docs/                        Build and integration documentation
-```
-
-## Development Guidelines
-
-### Adding a New Vision/VLM Processor
-
-Follow these steps to add a new model processor (e.g., `qwen3vl`):
-
-1. **Create the interface**:
-   - Add `include/geniex-proc/qwen3vl.h` with the processor class declaration
-   - Follow the naming pattern of existing processors (e.g., `qwen2vl.h`)
-
-2. **Implement the processor**:
-   - Add `src/processors/qwen3vl.cpp` with the implementation
-   - Follow existing patterns from `src/processors/qwen2vl.cpp` for consistent API design
-
-3. **Update build configuration** in `CMakeLists.txt`:
-   ```cmake
-   add_library(geniex-proc-vision ${_GENIEXPROC_LIB_TYPE}
-       src/vision/vision.cpp
-       src/processors/processor.cpp
-       src/processors/qwen2vl.cpp
-       src/processors/qwen3vl.cpp   # Add your processor here
-   )
-   ```
-
-4. **Add a test**:
-   - Add a test file under `tests/` (e.g., `tests/qwen3vl.cpp`)
-   - Register it in `tests/CMakeLists.txt`
-
-### Adding Audio / Video Processing
-
-The audio and video modules are scaffolded in `CMakeLists.txt` but not yet implemented:
-
-1. **Audio processors**:
-   - Create `src/audio/audio.cpp` for feature extraction (FFT, mel spectrograms, ...)
-   - Add model-specific processors under `src/processors/` (e.g., `qwen25omni.cpp`, `whisper.cpp`)
-   - Wire up `libsndfile`, `soxr`, and `fftw3` in the `geniex-proc-audio` target
-
-2. **Video processors**:
-   - Add a `src/video/` directory and a new `geniex-proc-video` target
-   - Integrate `decord` / `ffmpeg` for frame extraction
 
 ## Roadmap
 
@@ -124,16 +56,10 @@ The audio and video modules are scaffolded in `CMakeLists.txt` but not yet imple
 - **Chat Templates**: Multi-model chat template support (via minja)
 - **Vision Processing**: Qwen2-VL processor with stb-based image preprocessing
 
-### 🚧 In Development
+### 📋 Planned Features
 - Audio processing (WhisperFeatureExtractor, Parakeet, ...)
 - Additional VLM processors (Qwen3-VL, OmniVLM, ...)
 - Multi-modal Omni processors (Qwen2.5 Omni)
-- Video processing workflows
-
-### 📋 Planned Features
-- CLIP processor with image preprocessing
-- C wrappers and additional language bindings
-- Expanded examples and sample data
 
 ## Getting in Contact
 
