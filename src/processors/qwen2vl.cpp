@@ -157,7 +157,6 @@ struct Qwen2VLProcessor::Impl {
                     std::string(image_marker) + "'");
             }
 
-
             out += BOS_TOKEN;
             out += role_to_string(msg.role);
             out += '\n';
