@@ -16,7 +16,7 @@ This builds the core geniex-proc library with basic functionality.
 ## Prerequisites
 
 - **CMake 3.10+**
-- **C++20 compatible compiler** 
+- **C++20 compatible compiler**
 - **Git** (for submodules)
 - **Rust toolchain** (cargo) - Required for tokenizers-cpp
 
