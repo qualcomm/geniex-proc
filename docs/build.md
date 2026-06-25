@@ -55,7 +55,7 @@ Use vcpkg for dependency management:
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:\path\to\vcpkg\scripts\buildsystems\vcpkg.cmake
 cmake --build build --config Release
 ```
-📖 **See [vcpkg-static.md](vcpkg-static.md) for vcpkg setup and [zlib.md](zlib.md) for Windows dependencies**
+📖 **See [vcpkg-static.md](vcpkg-static.md) for vcpkg setup**
 
 ### Linux
 ```bash
@@ -123,7 +123,7 @@ Most dependencies are built-in as git submodules. External dependencies needed:
 
 - **Multi-modal processing**: 📖 **See [mm-process.md](mm-process.md)** for FFTW3, OpenMP, MP3 libraries, and FFmpeg
 - **Computer vision**: 📖 **See [build-opencv.md](build-opencv.md)** for OpenCV installation
-- **Windows dependencies**: 📖 **See [vcpkg-static.md](vcpkg-static.md)** and [zlib.md](zlib.md)
+- **Windows dependencies**: 📖 **See [vcpkg-static.md](vcpkg-static.md)**
 - **macOS OpenMP**: 📖 **See [openmp.md](openmp.md)**
 
 ## Build Scripts
@@ -140,7 +140,6 @@ The project includes several build scripts in the `scripts/` directory:
 ### Common Issues
 - **OpenMP on macOS**: 📖 **See [openmp.md](openmp.md)**
 - **FFTW3/vcpkg on Windows**: 📖 **See [vcpkg-static.md](vcpkg-static.md)** and [mm-process.md](mm-process.md)
-- **zlib conflicts**: 📖 **See [zlib.md](zlib.md)**
 
 ### Debug Build
 ```bash
@@ -178,6 +177,5 @@ After building, you can run the examples to verify functionality:
 
 - 📖 [mm-process.md](mm-process.md) - Multi-modal processing setup
 - 📖 [vcpkg-static.md](vcpkg-static.md) - Windows dependency management  
-- 📖 [zlib.md](zlib.md) - zlib installation
 - 📖 [openmp.md](openmp.md) - OpenMP setup for macOS
 - 📖 [build-opencv.md](build-opencv.md) - OpenCV build instructions
