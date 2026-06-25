@@ -12,7 +12,7 @@ export LIBRARY_PATH="/opt/homebrew/opt/libomp/lib:$LIBRARY_PATH"
 export LD_LIBRARY_PATH="/opt/homebrew/opt/libomp/lib:$LD_LIBRARY_PATH"
 ```
 
-Add following definations to your cmake configuration commands:
+Add the following definitions to your cmake configuration commands:
 
 ```bash
   -DCMAKE_C_FLAGS="-I/opt/homebrew/opt/libomp/include" \
