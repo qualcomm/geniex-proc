@@ -142,7 +142,7 @@ After this, we can begin to use the `xtensor` library.
 x = xt::concatenate(std::make_tuple(x, y), 0);
 ```
 
-- A combination of mathematical function (e.g., `xt::maximum`) and reducer (e.g., `xt::amax`) will be super slow and even stucks there forever. So use `xt::eval` to evaluate the result first.
+- A combination of mathematical function (e.g., `xt::maximum`) and reducer (e.g., `xt::amax`) will be super slow and even gets stuck forever. So use `xt::eval` to evaluate the result first.
 
 ```cpp
 // use xt::eval to evaluate the result first
