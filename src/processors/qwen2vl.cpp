@@ -166,7 +166,7 @@ struct Qwen2VLProcessor::Impl {
             for (size_t i = 0; i < msg.mm_content.size(); ++i) {
                 out += image_marker;
             }
-            
+
             out += msg.content;
             out += EOS_TOKEN;
             out += '\n';
