@@ -81,12 +81,13 @@ file for the full legal text.
 
 ---
 
-## Derived work — ggml
+## Derived work — llama.cpp
 
 Portions of `src/geniex-sampling/` are derived from or adapted from the
-[ggml](https://github.com/ggerganov/ggml) project, which is distributed
-under the MIT license. Files that contain derived material preserve the
-original ggml copyright notice alongside the Qualcomm BSD 3-Clause header.
+[llama.cpp](https://github.com/ggml-org/llama.cpp) project, which is
+distributed under the MIT license. Files that contain derived material
+preserve the original llama.cpp copyright notice alongside the Qualcomm
+BSD 3-Clause header.
 
 ---
 
