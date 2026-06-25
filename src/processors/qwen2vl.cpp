@@ -141,7 +141,6 @@ struct Qwen2VLProcessor::Impl {
     // Chat template — Qwen2-VL format
     // ------------------------------------------------------------------
 
-
     std::string build_template_text(
         const std::vector<geniex::ChatMessage>& messages,
         bool add_generation_prompt,
