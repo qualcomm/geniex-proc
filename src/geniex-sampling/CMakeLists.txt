@@ -7,7 +7,7 @@ set(GENIEX_SAMPLING_SRCS
     sampling-vocab.cpp
 )
 
-if (GENIEXPROC_BUILD_SHARED_LIB)
+if (GENIEXPROC_BUILD_SHARED_LIBS)
     add_library(geniex-sampling SHARED ${GENIEX_SAMPLING_SRCS})
     target_compile_definitions(geniex-sampling PRIVATE GENIEXPROC_BUILD)
     target_compile_definitions(geniex-sampling PUBLIC GENIEXPROC_SHARED)

@@ -3,7 +3,7 @@
 //
 // src/processors/qwen2vl.cpp — Qwen2-VL processor implementation.
 //
-// Compiled only when GENIEXPROC_BUILD_QWEN2VL is ON.
+// Compiled only when GENIEXPROC_ENABLE_VISION is ON.
 //
 // Architecture:
 //   Qwen2VLProcessor owns a pimpl (Impl) that holds the Tokenizer and all
@@ -141,7 +141,6 @@ struct Qwen2VLProcessor::Impl {
     // Chat template — Qwen2-VL format
     // ------------------------------------------------------------------
 
-
     std::string build_template_text(
         const std::vector<geniex::ChatMessage>& messages,
         bool add_generation_prompt,
@@ -158,7 +157,6 @@ struct Qwen2VLProcessor::Impl {
                     std::string(image_marker) + "'");
             }
 
-
             out += BOS_TOKEN;
             out += role_to_string(msg.role);
             out += '\n';
@@ -166,7 +164,7 @@ struct Qwen2VLProcessor::Impl {
             for (size_t i = 0; i < msg.mm_content.size(); ++i) {
                 out += image_marker;
             }
-            
+
             out += msg.content;
             out += EOS_TOKEN;
             out += '\n';

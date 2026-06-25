@@ -16,7 +16,7 @@ This builds the core geniex-proc library with basic functionality.
 ## Prerequisites
 
 - **CMake 3.10+**
-- **C++20 compatible compiler** 
+- **C++20 compatible compiler**
 - **Git** (for submodules)
 - **Rust toolchain** (cargo) - Required for tokenizers-cpp
 
@@ -29,8 +29,6 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo --version  # verify installation
 ```
 
-📖 **See [examples/hf-tokenizers/README.md](../examples/hf-tokenizers/README.md) for tokenizer usage examples**
-
 ## Build Options
 
 geniex-proc uses CMake options to control which features and modules to build:
@@ -38,25 +36,16 @@ geniex-proc uses CMake options to control which features and modules to build:
 ### Core Options
 | Option | Default | Description |
 |--------|---------|-------------|
-| `GENIEXPROC_BUILD_SHARED_LIB` | `OFF` | Build as shared library instead of static |
-| `GENIEXPROC_BUILD_EXAMPLES` | `ON` | Build example programs |
+| `GENIEXPROC_BUILD_SHARED_LIBS` | `OFF` | Build as shared library instead of static |
+| `GENIEXPROC_BUILD_TESTS` | `OFF` | Build and register CTest unit tests (GoogleTest via FetchContent) |
 | `GENIEXPROC_INSTALL` | `OFF` | Enable installation targets |
 
-### Module Options
+### Modality Options
 | Option | Default | Description |
 |--------|---------|-------------|
-| `GENIEXPROC_BUILD_MMPROCESS` | `OFF` | Build multi-modal processing module |
-| `GENIEXPROC_BUILD_MMPROCESS_AUDIO` | `OFF` | Add audio support to mm-process |
-| `GENIEXPROC_BUILD_MMPROCESS_VIDEO` | `OFF` | Add video support to mm-process |
-| `GENIEXPROC_BUILD_TRANSFORM` | `OFF` | Build transform utilities |
-| `GENIEXPROC_BUILD_PADDLE_OCR_PROC` | `OFF` | Build PaddleOCR processor |
-| `GENIEXPROC_BUILD_WITH_OPENCV` | `OFF` | Enable OpenCV integration |
-| `GENIEXPROC_BUILD_WITH_ZLIB` | `OFF` | Build with zlib support |
-| `GENIEXPROC_BUILD_C_WRAPPERS` | `OFF` | Build C API wrappers |
-
-> **Note**: Some options have dependencies. For example:
-> - `GENIEXPROC_BUILD_PADDLE_OCR_PROC` automatically enables `GENIEXPROC_BUILD_TRANSFORM` and `GENIEXPROC_BUILD_WITH_OPENCV`
-> - `GENIEXPROC_BUILD_TRANSFORM` automatically enables `GENIEXPROC_BUILD_WITH_OPENCV`
+| `GENIEXPROC_ENABLE_VISION` | `OFF` | Build image processing + all VLM processors (stb) |
+| `GENIEXPROC_ENABLE_AUDIO` | `OFF` | Build audio processing + all Omni processors (libsndfile, soxr, fftw3) |
+| `GENIEXPROC_ENABLE_VIDEO` | `OFF` | Build video processing (decord, ffmpeg) |
 
 ## Platform-Specific Instructions
 
@@ -66,7 +55,7 @@ Use vcpkg for dependency management:
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:\path\to\vcpkg\scripts\buildsystems\vcpkg.cmake
 cmake --build build --config Release
 ```
-📖 **See [vcpkg-static.md](vcpkg-static.md) for vcpkg setup and [zlib.md](zlib.md) for Windows dependencies**
+📖 **See [vcpkg-static.md](vcpkg-static.md) for vcpkg setup**
 
 ### Linux
 ```bash
@@ -132,26 +121,16 @@ cmake --build build
 
 Most dependencies are built-in as git submodules. External dependencies needed:
 
-- **Multi-modal processing**: 📖 **See [mm-process.md](mm-process.md)** for FFTW3, OpenMP, MP3 libraries, and FFmpeg
-- **Computer vision**: 📖 **See [build-opencv.md](build-opencv.md)** for OpenCV installation
-- **Windows dependencies**: 📖 **See [vcpkg-static.md](vcpkg-static.md)** and [zlib.md](zlib.md)
+- **Multi-modal processing**: FFTW3, OpenMP, MP3 libraries, and FFmpeg (install via system package manager)
+- **Computer vision**: OpenCV (install via system package manager or build from source)
+- **Windows dependencies**: 📖 **See [vcpkg-static.md](vcpkg-static.md)**
 - **macOS OpenMP**: 📖 **See [openmp.md](openmp.md)**
-
-## Build Scripts
-
-The project includes several build scripts in the `scripts/` directory:
-
-- `build-android.sh`: Android cross-compilation
-- `build-linux-arm64.sh`: ARM64 Linux cross-compilation  
-- `build-opencv-*.sh/.ps1`: OpenCV-specific builds
-- `update-dylib-deps.sh`: macOS library dependency management
 
 ## Troubleshooting
 
 ### Common Issues
 - **OpenMP on macOS**: 📖 **See [openmp.md](openmp.md)**
-- **FFTW3/vcpkg on Windows**: 📖 **See [vcpkg-static.md](vcpkg-static.md)** and [mm-process.md](mm-process.md)
-- **zlib conflicts**: 📖 **See [zlib.md](zlib.md)**
+- **FFTW3/vcpkg on Windows**: 📖 **See [vcpkg-static.md](vcpkg-static.md)**
 
 ### Debug Build
 ```bash
@@ -183,12 +162,9 @@ After building, you can run the examples to verify functionality:
 - **Custom toolchain**: `-DCMAKE_TOOLCHAIN_FILE=/path/to/toolchain.cmake`
 - **Custom build directory**: `cmake -B my-custom-build`  
 - **Parallel builds**: `cmake --build build -j$(nproc)` (Linux/macOS) or `--parallel` (Windows)
-- **Cross-compilation**: Use scripts in `scripts/` directory
+- **Cross-compilation**: Use a custom toolchain file for the target platform
 
 ## Related Documentation
 
-- 📖 [mm-process.md](mm-process.md) - Multi-modal processing setup
 - 📖 [vcpkg-static.md](vcpkg-static.md) - Windows dependency management  
-- 📖 [zlib.md](zlib.md) - zlib installation
 - 📖 [openmp.md](openmp.md) - OpenMP setup for macOS
-- 📖 [build-opencv.md](build-opencv.md) - OpenCV build instructions
