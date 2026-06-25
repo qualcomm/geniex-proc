@@ -42,21 +42,12 @@ geniex-proc uses CMake options to control which features and modules to build:
 | `GENIEXPROC_BUILD_TESTS` | `OFF` | Build and register CTest unit tests (GoogleTest via FetchContent) |
 | `GENIEXPROC_INSTALL` | `OFF` | Enable installation targets |
 
-### Module Options
+### Modality Options
 | Option | Default | Description |
 |--------|---------|-------------|
-| `GENIEXPROC_BUILD_MMPROCESS` | `OFF` | Build multi-modal processing module |
-| `GENIEXPROC_BUILD_MMPROCESS_AUDIO` | `OFF` | Add audio support to mm-process |
-| `GENIEXPROC_BUILD_MMPROCESS_VIDEO` | `OFF` | Add video support to mm-process |
-| `GENIEXPROC_BUILD_TRANSFORM` | `OFF` | Build transform utilities |
-| `GENIEXPROC_BUILD_PADDLE_OCR_PROC` | `OFF` | Build PaddleOCR processor |
-| `GENIEXPROC_BUILD_WITH_OPENCV` | `OFF` | Enable OpenCV integration |
-| `GENIEXPROC_BUILD_WITH_ZLIB` | `OFF` | Build with zlib support |
-| `GENIEXPROC_BUILD_C_WRAPPERS` | `OFF` | Build C API wrappers |
-
-> **Note**: Some options have dependencies. For example:
-> - `GENIEXPROC_BUILD_PADDLE_OCR_PROC` automatically enables `GENIEXPROC_BUILD_TRANSFORM` and `GENIEXPROC_BUILD_WITH_OPENCV`
-> - `GENIEXPROC_BUILD_TRANSFORM` automatically enables `GENIEXPROC_BUILD_WITH_OPENCV`
+| `GENIEXPROC_ENABLE_VISION` | `OFF` | Build image processing + all VLM processors (stb) |
+| `GENIEXPROC_ENABLE_AUDIO` | `OFF` | Build audio processing + all Omni processors (libsndfile, soxr, fftw3) |
+| `GENIEXPROC_ENABLE_VIDEO` | `OFF` | Build video processing (decord, ffmpeg) |
 
 ## Platform-Specific Instructions
 
