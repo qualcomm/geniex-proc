@@ -171,7 +171,6 @@ if(GENIEXPROC_ENABLE_AUDIO)
     geniexproc_configure_target(geniex-proc-audio)
     target_compile_definitions(geniex-proc-audio PUBLIC GENIEXPROC_ENABLE_AUDIO)
     target_link_libraries(geniex-proc-audio PUBLIC geniex-proc)
-    # TODO: link libsndfile, soxr, fftw3 here when audio sources are added
 endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
