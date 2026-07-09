@@ -24,14 +24,14 @@ namespace {
 //
 // "Already-printable" bytes map to themselves (e.g. byte 0x41 'A' → U+0041),
 // while bytes that would be control / whitespace / unprintable get pushed into
-// the U+0100..U+0142 range (33 of them).
+// the U+0100..U+0143 range (68 of them).
 //
 // We only need the *reverse* direction: codepoint → byte. The largest
-// codepoint produced is U+0142, so a flat 0x143-entry table (covering
-// codepoints 0..0x142) is enough for O(1) lookup. -1 marks codepoints that
-// are not part of the alphabet at all.
+// codepoint produced is U+0143 (the reverse of byte 0xAD), so a flat
+// 0x144-entry table (covering codepoints 0..0x143) is enough for O(1) lookup.
+// -1 marks codepoints that are not part of the alphabet at all.
 
-constexpr int32_t kMaxByteLevelCodepoint = 0x142;
+constexpr int32_t kMaxByteLevelCodepoint = 0x143;
 
 using ByteLevelTable = std::array<int16_t, kMaxByteLevelCodepoint + 1>;
 
@@ -49,7 +49,7 @@ ByteLevelTable build_byte_level_reverse_table() {
     add_self(161, 173);  // ¡..¬   (skips the soft hyphen at 0xAD)
     add_self(174, 256);  // ®..ÿ
 
-    // Then, the unprintable bytes get pushed into U+0100..U+0142 in order.
+    // Then, the unprintable bytes get pushed into U+0100..U+0143 in order.
     int32_t n = 0;
     for (int b = 0; b < 256; ++b) {
         bool already_in_bs = (b >= 33 && b < 127) ||
@@ -58,7 +58,7 @@ ByteLevelTable build_byte_level_reverse_table() {
         if (!already_in_bs) {
             int32_t cp = 256 + n;
             ++n;
-            // cp is in [256..256+33) = [0x100..0x121]. Bounds-check just in
+            // cp is in [256..256+68) = [0x100..0x143]. Bounds-check just in
             // case the alphabet definition is ever amended upstream.
             if (cp >= 0 && cp <= kMaxByteLevelCodepoint) {
                 t[static_cast<size_t>(cp)] = static_cast<int16_t>(b);
