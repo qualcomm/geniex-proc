@@ -156,6 +156,35 @@ bool try_byte_level(const std::string& piece, std::string& out) {
     return true;
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Rule C helper: SentencePiece metaspace — U+2581 "▁" (bytes E2 96 81) → space.
+// ───────────────────────────────────────────────────────────────────────────
+//
+// SentencePiece-family tokenizers (Gemma, Llama-SP) represent a space as the
+// metaspace codepoint U+2581 inside the piece string (e.g. "▁am" == " am").
+// GPT-2 byte-level tokenizers never emit U+2581 (they encode a space as U+0120
+// 'Ġ', handled by Rule B above), so replacing the 3-byte metaspace sequence
+// with an ASCII space is safe to apply unconditionally in the verbatim path.
+std::string replace_metaspace(const std::string& piece) {
+    static const char kMetaspace[] = "\xe2\x96\x81";  // U+2581, 3 bytes
+    constexpr size_t  kLen         = sizeof(kMetaspace) - 1;
+
+    if (piece.find(kMetaspace) == std::string::npos) return piece;
+
+    std::string out;
+    out.reserve(piece.size());
+    for (size_t i = 0; i < piece.size();) {
+        if (piece.compare(i, kLen, kMetaspace) == 0) {
+            out.push_back(' ');
+            i += kLen;
+        } else {
+            out.push_back(piece[i]);
+            ++i;
+        }
+    }
+    return out;
+}
+
 }  // namespace
 
 std::string token_id_to_raw_bytes(tokenizers::Tokenizer* tokenizer,
@@ -169,8 +198,8 @@ std::string token_id_to_raw_bytes(tokenizers::Tokenizer* tokenizer,
     if (try_sp_byte_fallback(piece, out)) return out;
     if (try_byte_level(piece, out))       return out;
 
-    // Rule C — verbatim fallback.
-    return piece;
+    // Rule C — SentencePiece metaspace → space, otherwise verbatim.
+    return replace_metaspace(piece);
 }
 
 }  // namespace geniex::internal
