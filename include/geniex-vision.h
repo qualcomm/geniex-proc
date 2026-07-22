@@ -5,4 +5,5 @@
 
 // geniex-vision.h — Vision (VLM) processor umbrella header.
 
+#include "geniex-proc/gemma4.h"
 #include "geniex-proc/qwen2vl.h"
