@@ -229,6 +229,17 @@ struct GENIEXPROC_API BatchFeatures {
     /// Per-image grid dimensions (T, H, W). Shape: [n_images, 3].
     /// Empty if no images were provided.
     xt::xarray<size_t> image_grid_thw;
+
+    /// Per-patch (x, y) grid coordinates. Shape: [n_images, max_patches, 2].
+    /// Padding patches carry (-1, -1). Used by patch-budget processors that pad
+    /// to a fixed patch count instead of reporting a grid (Gemma4, SigLIP2).
+    /// Empty for models that report image_grid_thw instead.
+    xt::xarray<int32_t> image_position_ids;
+
+    /// Soft (vision) tokens contributed by each image, after spatial pooling.
+    /// Shape: [n_images]. This is how many image-token slots the prompt carries
+    /// per image. Empty for models that don't pool.
+    std::vector<int32_t> num_soft_tokens_per_image;
 };
 
 // ============================================================

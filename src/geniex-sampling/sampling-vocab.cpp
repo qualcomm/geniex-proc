@@ -384,8 +384,16 @@ struct geniex_vocab_tokenizers : public geniex_vocab_interface {
             special_eog_ids.insert(special_fim_sep_id);
         }
 
-        for (const auto& candidate : {"<|eot_id|>", "<|im_end|>", "<|end|>", "<end_of_turn>", "<|endoftext|>",
-                                      "<|eom_id|>", "<EOT>", "_<EOT>", "<|end_of_text|>", "</s>"}) {
+        // TODO: replace this hardcoded table with a live read of tokenizer_config.json.
+        // The config carries `eot_token` / `eos_token` / `additional_special_tokens`
+        // which are the authoritative EOG markers for each model family. The vocab
+        // struct currently has no access to the config; the fix requires threading
+        // the parsed TokenizerConfig through from tokenizer.cpp after the vocab is
+        // built, then inserting those token strings here instead of (or in addition
+        // to) this list. Until then, new model families with novel EOG strings must
+        // be added manually (e.g. Gemma 4's `<turn|>` was added this way).
+        for (const auto& candidate : {"<|eot_id|>", "<|im_end|>", "<|end|>", "<end_of_turn>", "<turn|>",
+                                      "<|endoftext|>", "<|eom_id|>", "<EOT>", "_<EOT>", "<|end_of_text|>", "</s>"}) {
             auto id = tokenizer->TokenToId(candidate);
             if (id != GENIEX_TOKEN_NULL) {
                 special_eog_ids.insert(id);
