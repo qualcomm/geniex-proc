@@ -199,9 +199,36 @@ std::string Gemma4Processor::apply_chat_template(
     if (!impl_->tokenizer_) {
         throw std::runtime_error("geniex::gemma4: apply_chat_template needs a tokenizer");
     }
+
+    // Gemma4 ships a real chat template, so the text formatting is delegated to
+    // the tokenizer rather than hand-rolled as in Qwen2VL/InternVL. The
+    // tokenizer ignores ChatMessage::mm_content by contract, so splice one
+    // marker per attachment in here, ahead of the text (Gemma's upstream
+    // ordering); otherwise process() sees N images and 0 markers and throws.
+    const std::string& marker = image_marker();
+
+    std::vector<geniex::ChatMessage> expanded;
+    expanded.reserve(messages.size());
+    for (const auto& msg : messages) {
+        geniex::ChatMessage m = msg;
+        if (!msg.mm_content.empty()) {
+            // A literal marker in user content would shift the positional
+            // marker-to-image pairing in process().
+            if (!marker.empty() && msg.content.find(marker) != std::string::npos) {
+                throw std::runtime_error(
+                    "geniex::gemma4: ChatMessage::content contains the reserved image_marker '" + marker + "'");
+            }
+            std::string prefix;
+            prefix.reserve(marker.size() * msg.mm_content.size());
+            for (size_t i = 0; i < msg.mm_content.size(); ++i) prefix += marker;
+            m.content = prefix + msg.content;
+        }
+        expanded.push_back(std::move(m));
+    }
+
     geniex::ApplyChatTemplateOptions opts;
     opts.add_generation_prompt = add_generation_prompt;
-    return impl_->tokenizer_->apply_chat_template(messages, opts);
+    return impl_->tokenizer_->apply_chat_template(expanded, opts);
 }
 
 // ============================================================
