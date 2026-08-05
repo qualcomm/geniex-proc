@@ -148,6 +148,7 @@ if(GENIEXPROC_ENABLE_VISION)
         src/processors/processor.cpp
         src/processors/qwen2vl.cpp
         src/processors/gemma4.cpp
+        src/processors/internvl.cpp
     )
     geniexproc_configure_target(geniex-proc-vision)
     target_include_directories(geniex-proc-vision PRIVATE
