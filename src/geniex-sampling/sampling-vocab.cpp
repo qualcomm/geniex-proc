@@ -7,9 +7,6 @@
 
 #include "sampling-vocab.h"
 
-#include "src/internal/token_bytes.h"
-#include "src/internal/utils.h"
-
 #include <tokenizers_cpp.h>
 
 #include <algorithm>
@@ -18,8 +15,16 @@
 #include <memory>
 #include <set>
 
+#include "src/internal/token_bytes.h"
+#include "src/internal/utils.h"
+
 struct geniex_vocab_tokenizers : public geniex_vocab_interface {
     tokenizers::Tokenizer* tokenizer;
+
+    // Whether the tokenizer uses GPT-2 byte-level encoding, where each raw byte
+    // is remapped to a printable codepoint that per-token decode must reverse.
+    // False for SentencePiece byte-fallback, whose pieces are already UTF-8.
+    bool byte_level_encoding = false;
 
     // Cache for special tokens
     mutable geniex_token special_bos_id = GENIEX_TOKEN_NULL;
@@ -42,7 +47,10 @@ struct geniex_vocab_tokenizers : public geniex_vocab_interface {
     mutable geniex_token special_fim_rep_id = GENIEX_TOKEN_NULL;  // repo
     mutable geniex_token special_fim_sep_id = GENIEX_TOKEN_NULL;  // file separator
 
-    geniex_vocab_tokenizers(tokenizers::Tokenizer* tok) : tokenizer(tok) { cache_special_tokens(); }
+    geniex_vocab_tokenizers(tokenizers::Tokenizer* tok, bool byte_level = false)
+        : tokenizer(tok), byte_level_encoding(byte_level) {
+        cache_special_tokens();
+    }
 
     ~geniex_vocab_tokenizers() override = default;
 
@@ -50,7 +58,7 @@ struct geniex_vocab_tokenizers : public geniex_vocab_interface {
     int token_to_piece(geniex_token token, char* buf, int32_t length, bool special = false) override {
         if (!tokenizer || !buf || length <= 0) return 0;
 
-        std::string piece = geniex::internal::token_id_to_raw_bytes(tokenizer, token);
+        std::string piece = geniex::internal::token_id_to_raw_bytes(tokenizer, token, byte_level_encoding);
         if (piece.empty()) return 0;
 
         int copy_len = std::min(static_cast<int>(piece.length()), length - 1);
@@ -60,11 +68,11 @@ struct geniex_vocab_tokenizers : public geniex_vocab_interface {
     }
 
     std::string token_to_piece_str(geniex_token token) override {
-        return geniex::internal::token_id_to_raw_bytes(tokenizer, token);
+        return geniex::internal::token_id_to_raw_bytes(tokenizer, token, byte_level_encoding);
     }
 
     std::vector<geniex_token> tokenize(const std::string& text, bool add_special = false,
-                                     bool parse_special = false) override {
+                                       bool parse_special = false) override {
         if (!tokenizer) return {};
 
         return tokenizer->Encode(text);
@@ -425,19 +433,21 @@ struct geniex_vocab_tokenizers : public geniex_vocab_interface {
 
 geniex_vocab_interface* create_geniex_vocab_tokenizers(const std::string& vocab_path) {
     try {
-        auto tokenizer = tokenizers::Tokenizer::FromBlobJSON(read_file_to_string(vocab_path));
+        const std::string blob = read_file_to_string(vocab_path);
+        const bool byte_level = geniex::internal::tokenizer_json_is_byte_level(blob);
+        auto tokenizer = tokenizers::Tokenizer::FromBlobJSON(blob);
         if (!tokenizer) {
             return nullptr;
         }
-        return new geniex_vocab_tokenizers(tokenizer.release());
+        return new geniex_vocab_tokenizers(tokenizer.release(), byte_level);
     } catch (const std::exception&) {
         return nullptr;
     }
 }
 
-geniex_vocab_interface* create_geniex_vocab_tokenizers(tokenizers::Tokenizer* tokenizer) {
+geniex_vocab_interface* create_geniex_vocab_tokenizers(tokenizers::Tokenizer* tokenizer, bool byte_level_encoding) {
     if (!tokenizer) {
         return nullptr;
     }
-    return new geniex_vocab_tokenizers(tokenizer);
+    return new geniex_vocab_tokenizers(tokenizer, byte_level_encoding);
 }
