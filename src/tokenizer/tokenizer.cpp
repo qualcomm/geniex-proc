@@ -31,6 +31,11 @@ namespace geniex {
 struct Tokenizer::Impl {
     std::unique_ptr<tokenizers::Tokenizer> tok;
 
+    // True only for GPT-2 byte-level tokenizers, where per-token raw-byte
+    // decode must reverse the byte<->codepoint remap. SentencePiece
+    // byte-fallback tokenizers store UTF-8 verbatim and must not.
+    bool byte_level_encoding = false;
+
     // Vocab interface for use by Sampler/Grammar — created lazily on first access
     mutable std::unique_ptr<geniex_vocab_interface> vocab;
 
@@ -40,14 +45,14 @@ struct Tokenizer::Impl {
 
     Impl(const std::string& tokenizer_path,
          const std::string& tokenizer_config_path) {
-        tok = tokenizers::Tokenizer::FromBlobJSON(read_file_to_string(tokenizer_path));
+        const std::string blob = read_file_to_string(tokenizer_path);
+        tok = tokenizers::Tokenizer::FromBlobJSON(blob);
         if (!tok) {
             throw std::runtime_error("geniex::Tokenizer: failed to load tokenizer from: " + tokenizer_path);
         }
+        byte_level_encoding = geniex::internal::tokenizer_json_is_byte_level(blob);
         // Build vocab immediately so special tokens are cached
-        vocab = std::unique_ptr<geniex_vocab_interface>(
-            create_geniex_vocab_tokenizers(tok.get())
-        );
+        vocab = std::unique_ptr<geniex_vocab_interface>(create_geniex_vocab_tokenizers(tok.get(), byte_level_encoding));
 
         if (!tokenizer_config_path.empty()) {
             auto cfg = geniex::internal::load_tokenizer_config(tokenizer_config_path);
@@ -101,7 +106,7 @@ std::string Tokenizer::decode(const std::vector<int32_t>& ids,
 
 std::string Tokenizer::decode_token(int32_t token_id, bool stream_safe_utf8) const {
     if (stream_safe_utf8) {
-        return geniex::internal::token_id_to_raw_bytes(impl_->tok.get(), token_id);
+        return geniex::internal::token_id_to_raw_bytes(impl_->tok.get(), token_id, impl_->byte_level_encoding);
     }
     return impl_->tok->Decode({token_id});
 }

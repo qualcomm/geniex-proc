@@ -19,7 +19,7 @@ struct geniex_vocab_interface {
     // Core tokenization functions
     virtual int token_to_piece(geniex_token token, char* buf, int32_t length, bool special = false) = 0;
     virtual std::vector<geniex_token> tokenize(const std::string& text, bool add_special = false,
-                                             bool parse_special = false) = 0;
+                                               bool parse_special = false) = 0;
 
     // Convenience function for grammar - returns string directly
     virtual std::string token_to_piece_str(geniex_token token) = 0;
@@ -64,8 +64,13 @@ struct geniex_vocab_interface {
 };
 
 // Forward declaration to avoid including tokenizers_cpp.h here
-namespace tokenizers { class Tokenizer; }
+namespace tokenizers {
+class Tokenizer;
+}
 
-// Internal factory functions — not part of the public API
+// Internal factory functions — not part of the public API.
+// `byte_level_encoding` selects the raw-byte decode strategy for token pieces:
+// true for GPT-2 byte-level tokenizers, false for SentencePiece byte-fallback.
 geniex_vocab_interface* create_geniex_vocab_tokenizers(const std::string& vocab_path);
-geniex_vocab_interface* create_geniex_vocab_tokenizers(tokenizers::Tokenizer* tokenizer);
+geniex_vocab_interface* create_geniex_vocab_tokenizers(tokenizers::Tokenizer* tokenizer,
+                                                       bool byte_level_encoding = false);
