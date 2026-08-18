@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "geniex-proc/export.h"
+#include "geniex-proc/tokenizer.h"  // ApplyChatTemplateOptions
 #include "geniex-proc/types.h"
 
 namespace geniex {
@@ -44,10 +45,10 @@ public:
     const std::string& image_marker() const { return image_marker_; }
 
     /// Apply the model-specific chat template to `messages` and return the
-    /// formatted prompt string.
-    virtual std::string apply_chat_template(
-        const std::vector<ChatMessage>& messages,
-        bool add_generation_prompt = true) const = 0;
+    /// formatted prompt string. Processors that hand-roll their template may
+    /// honor only a subset of `opts` (e.g. add_generation_prompt).
+    virtual std::string apply_chat_template(const std::vector<ChatMessage>& messages,
+                                            const ApplyChatTemplateOptions& opts = {}) const = 0;
 
     /// Tokenize `formatted_text` and preprocess each image in `image_paths`
     /// into model-ready inputs. The formatted string must contain exactly

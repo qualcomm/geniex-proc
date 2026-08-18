@@ -93,7 +93,7 @@ class GENIEXPROC_API InternVLProcessor : public geniex::VisionProcessor {
     const InternVLConfig& config() const;
 
     std::string apply_chat_template(const std::vector<geniex::ChatMessage>& messages,
-                                    bool add_generation_prompt = true) const override;
+                                    const geniex::ApplyChatTemplateOptions& opts = {}) const override;
 
     /// @throws std::runtime_error if the marker count does not match image_paths.
     BatchFeatures process(const std::string& formatted_text, const std::vector<std::string>& image_paths) override;

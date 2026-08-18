@@ -97,9 +97,8 @@ public:
 
     const Gemma4Config& config() const;
 
-    std::string apply_chat_template(
-        const std::vector<geniex::ChatMessage>& messages,
-        bool add_generation_prompt = true) const override;
+    std::string apply_chat_template(const std::vector<geniex::ChatMessage>& messages,
+                                    const geniex::ApplyChatTemplateOptions& opts = {}) const override;
 
     /// @throws std::runtime_error if the marker count does not match image_paths.
     BatchFeatures process(
