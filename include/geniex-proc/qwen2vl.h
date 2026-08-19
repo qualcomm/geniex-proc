@@ -66,9 +66,8 @@ public:
     /// Access the underlying tokenizer (encode / decode / is_eog).
     geniex::Tokenizer& tokenizer();
 
-    std::string apply_chat_template(
-        const std::vector<geniex::ChatMessage>& messages,
-        bool add_generation_prompt = true) const override;
+    std::string apply_chat_template(const std::vector<geniex::ChatMessage>& messages,
+                                    const geniex::ApplyChatTemplateOptions& opts = {}) const override;
 
     /// @throws std::runtime_error if the marker count does not match.
     BatchFeatures process(

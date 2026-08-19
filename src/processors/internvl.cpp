@@ -154,8 +154,9 @@ geniex::Tokenizer& InternVLProcessor::tokenizer() {
 const InternVLConfig& InternVLProcessor::config() const { return impl_->config_; }
 
 std::string InternVLProcessor::apply_chat_template(const std::vector<geniex::ChatMessage>& messages,
-                                                   bool add_generation_prompt) const {
-    return impl_->build_template_text(messages, add_generation_prompt, image_marker());
+                                                   const geniex::ApplyChatTemplateOptions& opts) const {
+    // Hand-rolled ChatML: only add_generation_prompt is honored; tools are ignored.
+    return impl_->build_template_text(messages, opts.add_generation_prompt, image_marker());
 }
 
 // ============================================================

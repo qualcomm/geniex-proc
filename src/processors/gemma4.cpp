@@ -194,8 +194,8 @@ geniex::Tokenizer& Gemma4Processor::tokenizer() {
 
 const Gemma4Config& Gemma4Processor::config() const { return impl_->config_; }
 
-std::string Gemma4Processor::apply_chat_template(
-    const std::vector<geniex::ChatMessage>& messages, bool add_generation_prompt) const {
+std::string Gemma4Processor::apply_chat_template(const std::vector<geniex::ChatMessage>& messages,
+                                                 const geniex::ApplyChatTemplateOptions& opts) const {
     if (!impl_->tokenizer_) {
         throw std::runtime_error("geniex::gemma4: apply_chat_template needs a tokenizer");
     }
@@ -226,8 +226,6 @@ std::string Gemma4Processor::apply_chat_template(
         expanded.push_back(std::move(m));
     }
 
-    geniex::ApplyChatTemplateOptions opts;
-    opts.add_generation_prompt = add_generation_prompt;
     return impl_->tokenizer_->apply_chat_template(expanded, opts);
 }
 

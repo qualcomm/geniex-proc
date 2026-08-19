@@ -99,7 +99,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateWrapsRoleAndContent) {
     std::vector<geniex::ChatMessage> msgs = {
         {geniex::Role::User, "hello", /*mm_content=*/{}},
     };
-    auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/false);
+    auto text = p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/false});
 
     EXPECT_NE(text.find("<|im_start|>user\n"), std::string::npos)  << text;
     EXPECT_NE(text.find("hello"),              std::string::npos)  << text;
@@ -115,7 +115,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateAppendsAssistantPrompt) {
     std::vector<geniex::ChatMessage> msgs = {
         {geniex::Role::User, "hi", {}},
     };
-    auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/true);
+    auto text = p->apply_chat_template(msgs);
 
     // The assistant opener must appear exactly once and at the end.
     const std::string suffix = "<|im_start|>assistant\n";
@@ -133,7 +133,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateHandlesMultipleMessages) {
         {geniex::Role::User,      "hello",           {}},
         {geniex::Role::Assistant, "hi there",        {}},
     };
-    auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/false);
+    auto text = p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/false});
 
     EXPECT_NE(text.find("<|im_start|>system"),    std::string::npos);
     EXPECT_NE(text.find("<|im_start|>user"),      std::string::npos);
@@ -153,7 +153,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateInsertsOneMarkerPerMMContent) {
              {geniex::Modality::Image, "b.png"},
          }},
     };
-    auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/true);
+    auto text = p->apply_chat_template(msgs);
 
     // Count occurrences of the default marker.
     const std::string marker = geniex::kDefaultImageMarker;
@@ -176,8 +176,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateRejectsLiteralMarkerInContent) {
          std::string("sneaky ") + geniex::kDefaultImageMarker,
          {}},
     };
-    EXPECT_THROW(p->apply_chat_template(msgs, /*add_generation_prompt=*/true),
-                 std::runtime_error);
+    EXPECT_THROW(p->apply_chat_template(msgs), std::runtime_error);
 }
 
 // ─── process() — end-to-end on a generated image ─────────────────────────────
@@ -220,7 +219,7 @@ TEST(Qwen2VLProcessor, ProcessPopulatesAllBatchFields) {
         {geniex::Role::User, "describe",
          {{geniex::Modality::Image, image.string()}}},
     };
-    const auto formatted = p->apply_chat_template(msgs, /*add_generation_prompt=*/true);
+    const auto formatted = p->apply_chat_template(msgs);
 
     auto features = p->process(formatted, {image.string()});
 
@@ -260,7 +259,7 @@ TEST(Qwen2VLProcessor, ProcessTextOnlyProducesNonEmptyIdsAndEmptyPixels) {
     std::vector<geniex::ChatMessage> msgs = {
         {geniex::Role::User, "hello world", {}},
     };
-    const auto formatted = p->apply_chat_template(msgs, /*add_generation_prompt=*/true);
+    const auto formatted = p->apply_chat_template(msgs);
 
     auto features = p->process(formatted, /*image_paths=*/{});
 
