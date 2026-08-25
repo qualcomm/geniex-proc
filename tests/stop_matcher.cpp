@@ -98,7 +98,7 @@ TEST(StopMatcher, StopAtStart) {
 
 TEST(StopMatcher, EmptyStopsPassThrough) {
     EXPECT_FALSE(StopMatcher({""}).active());
-    EXPECT_FALSE(StopMatcher({}).active());
+    EXPECT_FALSE(StopMatcher(std::vector<std::string>{}).active());
     const auto r = run({""}, {"abc"});
     EXPECT_EQ(r.emitted, "abc");
     EXPECT_FALSE(r.matched);
