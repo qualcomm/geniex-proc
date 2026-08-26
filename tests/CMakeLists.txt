@@ -96,6 +96,7 @@ endfunction()
 geniexproc_add_test(sampler   sampler.cpp)
 geniexproc_add_test(tokenizer tokenizer.cpp)
 geniexproc_add_test(token_bytes token_bytes.cpp)
+geniexproc_add_test(stop_matcher stop_matcher.cpp)
 
 if(GENIEXPROC_ENABLE_VISION)
     geniexproc_add_test(vision
