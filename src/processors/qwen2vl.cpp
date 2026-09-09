@@ -16,13 +16,12 @@
 #include <string_view>
 #include <tuple>
 #include <vector>
-
 #include <xtensor/containers/xadapt.hpp>
 #include <xtensor/containers/xarray.hpp>
+#include <xtensor/containers/xtensor.hpp>
+#include <xtensor/core/xmath.hpp>
 #include <xtensor/generators/xbuilder.hpp>
 #include <xtensor/misc/xmanipulation.hpp>
-#include <xtensor/core/xmath.hpp>
-#include <xtensor/containers/xtensor.hpp>
 #include <xtensor/views/xview.hpp>
 
 #include "vision/vision.h"
@@ -263,11 +262,10 @@ geniex::Tokenizer& Qwen2VLProcessor::tokenizer() {
     return *impl_->tokenizer_;
 }
 
-std::string Qwen2VLProcessor::apply_chat_template(
-    const std::vector<geniex::ChatMessage>& messages,
-    bool add_generation_prompt) const
-{
-    return impl_->build_template_text(messages, add_generation_prompt, image_marker());
+std::string Qwen2VLProcessor::apply_chat_template(const std::vector<geniex::ChatMessage>& messages,
+                                                  const geniex::ApplyChatTemplateOptions& opts) const {
+    // Hand-rolled ChatML: only add_generation_prompt is honored; tools are ignored.
+    return impl_->build_template_text(messages, opts.add_generation_prompt, image_marker());
 }
 
 BatchFeatures Qwen2VLProcessor::process(

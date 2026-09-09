@@ -100,7 +100,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateWrapsRoleAndContent) {
     std::vector<geniex::ChatMessage> msgs = {
         {geniex::Role::User, "hello", /*mm_content=*/{}},
     };
-    auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/false);
+    auto text = p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/false});
 
     EXPECT_NE(text.find("<|im_start|>user\n"), std::string::npos)  << text;
     EXPECT_NE(text.find("hello"),              std::string::npos)  << text;
@@ -116,7 +116,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateAppendsAssistantPrompt) {
     std::vector<geniex::ChatMessage> msgs = {
         {geniex::Role::User, "hi", {}},
     };
-    auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/true);
+    auto text = p->apply_chat_template(msgs);
 
     // The assistant opener must appear exactly once and at the end.
     const std::string suffix = "<|im_start|>assistant\n";
@@ -134,7 +134,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateHandlesMultipleMessages) {
         {geniex::Role::User,      "hello",           {}},
         {geniex::Role::Assistant, "hi there",        {}},
     };
-    auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/false);
+    auto text = p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/false});
 
     EXPECT_NE(text.find("<|im_start|>system"),    std::string::npos);
     EXPECT_NE(text.find("<|im_start|>user"),      std::string::npos);
@@ -154,7 +154,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateInsertsOneMarkerPerMMContent) {
              {geniex::Modality::Image, "b.png"},
          }},
     };
-    auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/true);
+    auto text = p->apply_chat_template(msgs);
 
     // Count occurrences of the default marker.
     const std::string marker = geniex::kDefaultImageMarker;
@@ -177,8 +177,7 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateRejectsLiteralMarkerInContent) {
          std::string("sneaky ") + geniex::kDefaultImageMarker,
          {}},
     };
-    EXPECT_THROW(p->apply_chat_template(msgs, /*add_generation_prompt=*/true),
-                 std::runtime_error);
+    EXPECT_THROW(p->apply_chat_template(msgs), std::runtime_error);
 }
 
 // ─── process() — end-to-end on a generated image ─────────────────────────────
@@ -221,7 +220,7 @@ TEST(Qwen2VLProcessor, ProcessPopulatesAllBatchFields) {
         {geniex::Role::User, "describe",
          {{geniex::Modality::Image, image.string()}}},
     };
-    const auto formatted = p->apply_chat_template(msgs, /*add_generation_prompt=*/true);
+    const auto formatted = p->apply_chat_template(msgs);
 
     auto features = p->process(formatted, {image.string()});
 
@@ -261,7 +260,7 @@ TEST(Qwen2VLProcessor, ProcessTextOnlyProducesNonEmptyIdsAndEmptyPixels) {
     std::vector<geniex::ChatMessage> msgs = {
         {geniex::Role::User, "hello world", {}},
     };
-    const auto formatted = p->apply_chat_template(msgs, /*add_generation_prompt=*/true);
+    const auto formatted = p->apply_chat_template(msgs);
 
     auto features = p->process(formatted, /*image_paths=*/{});
 
@@ -295,9 +294,9 @@ TEST(Gemma4Processor, ApplyChatTemplateUserOnly) {
     ASSERT_TRUE(p != nullptr);
 
     const std::vector<geniex::ChatMessage> msgs = {{geniex::Role::User, "hello", {}}};
-    EXPECT_EQ(p->apply_chat_template(msgs, /*add_generation_prompt=*/true),
+    EXPECT_EQ(p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
               "<bos><|turn>user\nhello<turn|>\n<|turn>model\n");
-    EXPECT_EQ(p->apply_chat_template(msgs, /*add_generation_prompt=*/false),
+    EXPECT_EQ(p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/false}),
               "<bos><|turn>user\nhello<turn|>\n");
 }
 
@@ -312,7 +311,7 @@ TEST(Gemma4Processor, ApplyChatTemplateEmitsBosOnlyOnce) {
         {geniex::Role::Assistant, "a1", {}},
         {geniex::Role::User, "q2", {}},
     };
-    const auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/true);
+    const auto text = p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true});
     EXPECT_EQ(text,
               "<bos><|turn>user\nq1<turn|>\n<|turn>model\na1<turn|>\n<|turn>user\nq2<turn|>\n<|turn>model\n");
 
@@ -327,7 +326,7 @@ TEST(Gemma4Processor, ApplyChatTemplateRendersAssistantAsModel) {
     ASSERT_TRUE(p != nullptr);
 
     const std::vector<geniex::ChatMessage> msgs = {{geniex::Role::Assistant, "hi", {}}};
-    const auto text = p->apply_chat_template(msgs, /*add_generation_prompt=*/false);
+    const auto text = p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/false});
     EXPECT_EQ(text, "<bos><|turn>model\nhi<turn|>\n");
     EXPECT_EQ(text.find("assistant"), std::string::npos) << text;
 }
@@ -340,7 +339,7 @@ TEST(Gemma4Processor, ApplyChatTemplateSystemTurn) {
         {geniex::Role::System, "You are helpful.", {}},
         {geniex::Role::User, "hello", {}},
     };
-    EXPECT_EQ(p->apply_chat_template(msgs, /*add_generation_prompt=*/true),
+    EXPECT_EQ(p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
               "<bos><|turn>system\nYou are helpful.<turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n");
 }
 
@@ -354,7 +353,7 @@ TEST(Gemma4Processor, ApplyChatTemplateEmitsOneMarkerPerImage) {
     two.mm_content.push_back({geniex::Modality::Image, "a.jpg"});
     two.mm_content.push_back({geniex::Modality::Image, "b.jpg"});
 
-    EXPECT_EQ(p->apply_chat_template({two}, /*add_generation_prompt=*/true),
+    EXPECT_EQ(p->apply_chat_template({two}, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
               "<bos><|turn>user\n<__image__><__image__>compare them<turn|>\n<|turn>model\n");
 }
 
@@ -370,7 +369,8 @@ TEST(Gemma4Processor, ApplyChatTemplateTrimsContentEdges) {
     ASSERT_TRUE(p != nullptr);
 
     auto render = [&p](const std::string& body) {
-        return p->apply_chat_template({{geniex::Role::User, body, {}}}, /*add_generation_prompt=*/true);
+        return p->apply_chat_template(
+            {{geniex::Role::User, body, {}}}, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true});
     };
 
     // Leading and trailing whitespace goes, including newlines and tabs.
@@ -390,7 +390,8 @@ TEST(Gemma4Processor, ApplyChatTemplatePreservesInteriorWhitespace) {
     ASSERT_TRUE(p != nullptr);
 
     auto render = [&p](const std::string& body) {
-        return p->apply_chat_template({{geniex::Role::User, body, {}}}, /*add_generation_prompt=*/true);
+        return p->apply_chat_template(
+            {{geniex::Role::User, body, {}}}, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true});
     };
 
     // The edges are stripped but the single interior space survives.
@@ -412,5 +413,7 @@ TEST(Gemma4Processor, ApplyChatTemplateRejectsLiteralMarkerInContent) {
     const std::vector<geniex::ChatMessage> msgs = {
         {geniex::Role::User, std::string("look ") + geniex::kDefaultImageMarker, {}},
     };
-    EXPECT_THROW(p->apply_chat_template(msgs, true), std::runtime_error);
+    EXPECT_THROW(
+        p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
+        std::runtime_error);
 }

@@ -272,9 +272,10 @@ geniex::Tokenizer& Gemma4Processor::tokenizer() {
 const Gemma4Config& Gemma4Processor::config() const { return impl_->config_; }
 
 std::string Gemma4Processor::apply_chat_template(
-    const std::vector<geniex::ChatMessage>& messages, bool add_generation_prompt) const {
+    const std::vector<geniex::ChatMessage>& messages, const geniex::ApplyChatTemplateOptions& opts) const {
     // No tokenizer needed: the framing comes from the message list alone.
-    return impl_->build_template_text(messages, add_generation_prompt, image_marker());
+    // Hand-rolled template: only add_generation_prompt is honored; tools are ignored.
+    return impl_->build_template_text(messages, opts.add_generation_prompt, image_marker());
 }
 
 // ============================================================
