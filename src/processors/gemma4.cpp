@@ -14,6 +14,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <xtensor/containers/xadapt.hpp>
@@ -30,6 +31,36 @@ namespace {
 
 // Gemma4 only ships graphs for these soft-token budgets.
 constexpr int kSupportedSoftTokens[] = {70, 140, 280, 560, 1120};
+
+// Turn framing. Unlike ChatML's <|im_start|>, Gemma's BOS is a real
+// beginning-of-sequence token, separate from the turn delimiters.
+static const std::string BOS_TOKEN  = "<bos>";
+static const std::string TURN_OPEN  = "<|turn>";
+static const std::string TURN_CLOSE = "<turn|>";
+
+// Gemma names the assistant role "model".
+const char* gemmaRoleName(geniex::Role role) {
+    return role == geniex::Role::Assistant ? "model" : geniex::role_to_string(role);
+}
+
+// Strips leading and trailing whitespace, leaving the interior untouched.
+//
+// Required for parity, not cosmetic: Gemma's published Jinja template pipes
+// every message body through `| trim` before emitting it
+// ({{- message['content'] | trim -}}), so a builder that skips this renders a
+// different prompt than upstream for any body with surrounding whitespace —
+// and the surrounding turn markers already supply the newlines, so leaving it
+// in would put stray blank lines inside the turn.
+//
+// Edges only, matching Jinja's filter (Python str.strip()): "  a b  \n" becomes
+// "a b", while "a   b" and "a\n\nb" are passed through verbatim. The character
+// set is str.strip()'s default whitespace.
+std::string trim(const std::string& s) {
+    const char* ws    = " \t\n\r\f\v";
+    const auto  first = s.find_first_not_of(ws);
+    if (first == std::string::npos) return {};
+    return s.substr(first, s.find_last_not_of(ws) - first + 1);
+}
 
 // Aspect-ratio-preserving target size: the largest (h, w) that produces at most
 // `max_patches` patches and is divisible by pooling_kernel_size * patch_size.
@@ -98,6 +129,52 @@ struct Gemma4Processor::Impl {
                 "geniex::gemma4: max_soft_tokens must be one of {70,140,280,560,1120}, got " +
                 std::to_string(config_.max_soft_tokens));
         }
+    }
+
+    // Gemma4 turn framing, hand-rolled as in Qwen2VL / InternVL. Byte-identical
+    // to the bundled Jinja template for the message shapes supported here:
+    //
+    //   <bos>  then per message  <|turn>ROLE\n <markers> <trimmed> <turn|>\n
+    //   then, if add_generation_prompt,  <|turn>model\n
+    //
+    // BOS lands once at the very start, not per turn as in ChatML — so a
+    // multi-turn caller reusing a KV cache must feed only the new turn's delta
+    // and re-emit the previous turn's `<turn|>` itself.
+    //
+    // Narrower than the Jinja it replaces: tool calls and the thinking channel
+    // are not rendered. Nothing drives either today; see the follow-up to move
+    // every VLM processor back onto Jinja.
+    std::string build_template_text(const std::vector<geniex::ChatMessage>& messages, bool add_generation_prompt,
+                                    std::string_view image_marker) const {
+        std::string out = BOS_TOKEN;
+        for (const auto& msg : messages) {
+            // A literal marker here would break positional marker-to-image
+            // pairing in process().
+            if (!image_marker.empty() && msg.content.find(image_marker) != std::string::npos) {
+                GENIEXPROC_THROW("ChatMessage::content contains the reserved image_marker '" +
+                                 std::string(image_marker) + "'");
+            }
+
+            out += TURN_OPEN;
+            out += gemmaRoleName(msg.role);
+            out += '\n';
+
+            // Markers lead the text, matching Gemma's upstream ordering.
+            for (size_t i = 0; i < msg.mm_content.size(); ++i) {
+                out += image_marker;
+            }
+
+            out += trim(msg.content);
+            out += TURN_CLOSE;
+            out += '\n';
+        }
+
+        if (add_generation_prompt) {
+            out += TURN_OPEN;
+            out += gemmaRoleName(geniex::Role::Assistant);
+            out += '\n';
+        }
+        return out;
     }
 
     // Preprocesses one image into `max_patches` rows of `patch_dim` floats plus
@@ -194,39 +271,11 @@ geniex::Tokenizer& Gemma4Processor::tokenizer() {
 
 const Gemma4Config& Gemma4Processor::config() const { return impl_->config_; }
 
-std::string Gemma4Processor::apply_chat_template(const std::vector<geniex::ChatMessage>& messages,
-                                                 const geniex::ApplyChatTemplateOptions& opts) const {
-    if (!impl_->tokenizer_) {
-        throw std::runtime_error("geniex::gemma4: apply_chat_template needs a tokenizer");
-    }
-
-    // Gemma4 ships a real chat template, so the text formatting is delegated to
-    // the tokenizer rather than hand-rolled as in Qwen2VL/InternVL. The
-    // tokenizer ignores ChatMessage::mm_content by contract, so splice one
-    // marker per attachment in here, ahead of the text (Gemma's upstream
-    // ordering); otherwise process() sees N images and 0 markers and throws.
-    const std::string& marker = image_marker();
-
-    std::vector<geniex::ChatMessage> expanded;
-    expanded.reserve(messages.size());
-    for (const auto& msg : messages) {
-        geniex::ChatMessage m = msg;
-        if (!msg.mm_content.empty()) {
-            // A literal marker in user content would shift the positional
-            // marker-to-image pairing in process().
-            if (!marker.empty() && msg.content.find(marker) != std::string::npos) {
-                throw std::runtime_error(
-                    "geniex::gemma4: ChatMessage::content contains the reserved image_marker '" + marker + "'");
-            }
-            std::string prefix;
-            prefix.reserve(marker.size() * msg.mm_content.size());
-            for (size_t i = 0; i < msg.mm_content.size(); ++i) prefix += marker;
-            m.content = prefix + msg.content;
-        }
-        expanded.push_back(std::move(m));
-    }
-
-    return impl_->tokenizer_->apply_chat_template(expanded, opts);
+std::string Gemma4Processor::apply_chat_template(
+    const std::vector<geniex::ChatMessage>& messages, const geniex::ApplyChatTemplateOptions& opts) const {
+    // No tokenizer needed: the framing comes from the message list alone.
+    // Hand-rolled template: only add_generation_prompt is honored; tools are ignored.
+    return impl_->build_template_text(messages, opts.add_generation_prompt, image_marker());
 }
 
 // ============================================================

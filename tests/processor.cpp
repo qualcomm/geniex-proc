@@ -25,6 +25,7 @@
 #include <stb_image_write.h>
 
 #include "geniex-proc/processor.h"
+#include "geniex-proc/gemma4.h"
 #include "geniex-proc/qwen2vl.h"
 #include "geniex-proc/tokenizer.h"
 #include "geniex-proc/types.h"
@@ -268,4 +269,151 @@ TEST(Qwen2VLProcessor, ProcessTextOnlyProducesNonEmptyIdsAndEmptyPixels) {
     // With zero images, pixel_values and image_grid_thw remain default-empty.
     EXPECT_EQ(features.pixel_values.shape().size(),   0u);
     EXPECT_EQ(features.image_grid_thw.shape().size(), 0u);
+}
+
+// ─── Gemma4Processor::apply_chat_template ────────────────────────────────────
+//
+// Gemma4's framing is hand-rolled (as Qwen2VL's and InternVL's are), so these
+// assert the exact rendered string. The expectations were captured from the
+// bundled Jinja template it replaced, against the E4B bundle, so a drift here is
+// a drift away from upstream Gemma formatting.
+//
+// No tokenizer fixture is needed: the builder works off the message list alone.
+
+namespace {
+
+std::unique_ptr<geniex::gemma4::Gemma4Processor> make_gemma4_processor() {
+    return geniex::gemma4::Gemma4Processor::create(
+        /*tokenizer_path=*/"", /*tokenizer_config_path=*/"", geniex::gemma4::Gemma4Config{});
+}
+
+}  // namespace
+
+TEST(Gemma4Processor, ApplyChatTemplateUserOnly) {
+    auto p = make_gemma4_processor();
+    ASSERT_TRUE(p != nullptr);
+
+    const std::vector<geniex::ChatMessage> msgs = {{geniex::Role::User, "hello", {}}};
+    EXPECT_EQ(p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
+              "<bos><|turn>user\nhello<turn|>\n<|turn>model\n");
+    EXPECT_EQ(p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/false}),
+              "<bos><|turn>user\nhello<turn|>\n");
+}
+
+// BOS is emitted exactly once, before the first turn — not per turn as in
+// ChatML. A caller re-rendering a transcript would therefore repeat it.
+TEST(Gemma4Processor, ApplyChatTemplateEmitsBosOnlyOnce) {
+    auto p = make_gemma4_processor();
+    ASSERT_TRUE(p != nullptr);
+
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::User, "q1", {}},
+        {geniex::Role::Assistant, "a1", {}},
+        {geniex::Role::User, "q2", {}},
+    };
+    const auto text = p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true});
+    EXPECT_EQ(text,
+              "<bos><|turn>user\nq1<turn|>\n<|turn>model\na1<turn|>\n<|turn>user\nq2<turn|>\n<|turn>model\n");
+
+    size_t bos_count = 0;
+    for (size_t i = text.find("<bos>"); i != std::string::npos; i = text.find("<bos>", i + 1)) ++bos_count;
+    EXPECT_EQ(bos_count, 1u);
+}
+
+// Gemma names the assistant role "model".
+TEST(Gemma4Processor, ApplyChatTemplateRendersAssistantAsModel) {
+    auto p = make_gemma4_processor();
+    ASSERT_TRUE(p != nullptr);
+
+    const std::vector<geniex::ChatMessage> msgs = {{geniex::Role::Assistant, "hi", {}}};
+    const auto text = p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/false});
+    EXPECT_EQ(text, "<bos><|turn>model\nhi<turn|>\n");
+    EXPECT_EQ(text.find("assistant"), std::string::npos) << text;
+}
+
+TEST(Gemma4Processor, ApplyChatTemplateSystemTurn) {
+    auto p = make_gemma4_processor();
+    ASSERT_TRUE(p != nullptr);
+
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::System, "You are helpful.", {}},
+        {geniex::Role::User, "hello", {}},
+    };
+    EXPECT_EQ(p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
+              "<bos><|turn>system\nYou are helpful.<turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n");
+}
+
+// One marker per attachment, ahead of the text, so process() pairs the i-th
+// marker with image_paths[i].
+TEST(Gemma4Processor, ApplyChatTemplateEmitsOneMarkerPerImage) {
+    auto p = make_gemma4_processor();
+    ASSERT_TRUE(p != nullptr);
+
+    geniex::ChatMessage two{geniex::Role::User, "compare them", {}};
+    two.mm_content.push_back({geniex::Modality::Image, "a.jpg"});
+    two.mm_content.push_back({geniex::Modality::Image, "b.jpg"});
+
+    EXPECT_EQ(p->apply_chat_template({two}, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
+              "<bos><|turn>user\n<__image__><__image__>compare them<turn|>\n<|turn>model\n");
+}
+
+// Message bodies are trimmed at the EDGES ONLY, matching the Jinja's
+// `{{- message['content'] | trim -}}`. Skipping it would render a different
+// prompt than upstream Gemma for any body with surrounding whitespace.
+//
+// Each expectation below was verified against the bundle's real Jinja template
+// (rendered through Tokenizer::apply_chat_template on an E4B bundle) and is
+// byte-identical to it.
+TEST(Gemma4Processor, ApplyChatTemplateTrimsContentEdges) {
+    auto p = make_gemma4_processor();
+    ASSERT_TRUE(p != nullptr);
+
+    auto render = [&p](const std::string& body) {
+        return p->apply_chat_template(
+            {{geniex::Role::User, body, {}}}, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true});
+    };
+
+    // Leading and trailing whitespace goes, including newlines and tabs.
+    EXPECT_EQ(render("  hello  \n"), "<bos><|turn>user\nhello<turn|>\n<|turn>model\n");
+    EXPECT_EQ(render("\n\n  hi  \t\n"), "<bos><|turn>user\nhi<turn|>\n<|turn>model\n");
+    EXPECT_EQ(render("\tlead and trail tab\t"), "<bos><|turn>user\nlead and trail tab<turn|>\n<|turn>model\n");
+
+    // A body that is nothing but whitespace collapses to an empty turn.
+    EXPECT_EQ(render("   "), "<bos><|turn>user\n<turn|>\n<|turn>model\n");
+}
+
+// Interior whitespace is NOT touched -- only the edges are. Kept separate from
+// the case above because this is the half that is easy to get wrong: a builder
+// that normalised or collapsed runs would still pass the edge cases.
+TEST(Gemma4Processor, ApplyChatTemplatePreservesInteriorWhitespace) {
+    auto p = make_gemma4_processor();
+    ASSERT_TRUE(p != nullptr);
+
+    auto render = [&p](const std::string& body) {
+        return p->apply_chat_template(
+            {{geniex::Role::User, body, {}}}, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true});
+    };
+
+    // The edges are stripped but the single interior space survives.
+    EXPECT_EQ(render("  hello world  \n"), "<bos><|turn>user\nhello world<turn|>\n<|turn>model\n");
+
+    // Nothing to strip, and an interior run is passed through verbatim.
+    EXPECT_EQ(render("hello   world"), "<bos><|turn>user\nhello   world<turn|>\n<|turn>model\n");
+
+    // Interior newlines survive too, so multi-line bodies keep their shape.
+    EXPECT_EQ(render("a\n\nb"), "<bos><|turn>user\na\n\nb<turn|>\n<|turn>model\n");
+}
+
+// A literal marker in user content would shift positional marker-to-image
+// pairing in process(), so it is rejected rather than silently mispaired.
+TEST(Gemma4Processor, ApplyChatTemplateRejectsLiteralMarkerInContent) {
+    auto p = make_gemma4_processor();
+    ASSERT_TRUE(p != nullptr);
+
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::User, std::string("look ") + geniex::kDefaultImageMarker, {}},
+    };
+    EXPECT_THROW(
+        p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
+        std::runtime_error);
 }
