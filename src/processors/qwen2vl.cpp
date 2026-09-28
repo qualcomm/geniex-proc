@@ -11,6 +11,7 @@
 
 #include "geniex-proc/qwen2vl.h"
 
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -41,6 +42,10 @@ static const std::string EOS_TOKEN = "<|im_end|>";
 static constexpr int32_t VISION_START_ID = 151652;
 static constexpr int32_t VISION_END_ID   = 151653;
 static constexpr int32_t IMAGE_PAD_ID    = 151655;
+
+namespace {
+using json = nlohmann::ordered_json;
+}  // namespace
 
 // ============================================================
 // Pimpl
@@ -140,36 +145,88 @@ struct Qwen2VLProcessor::Impl {
     // Chat template — Qwen2-VL format
     // ------------------------------------------------------------------
 
-    std::string build_template_text(
-        const std::vector<geniex::ChatMessage>& messages,
-        bool add_generation_prompt,
-        std::string_view image_marker) const
-    {
+    std::string build_template_text(const std::vector<geniex::ChatMessage>& messages,
+                                    const geniex::ApplyChatTemplateOptions& opts, std::string_view image_marker) const {
+        json tools = json::array();
+        if (!opts.tools_json.empty()) {
+            tools = json::parse(opts.tools_json);
+            if (!tools.is_array()) GENIEXPROC_THROW("tools_json must be a JSON array");
+        } else {
+            for (const auto& tool : opts.tools) {
+                tools.push_back(
+                    {{"type", "function"},
+                     {"function",
+                      {{"name", tool.name},
+                       {"description", tool.description},
+                       {"parameters", tool.parameters_json.empty() ? json::object() : json::parse(tool.parameters_json)}}}});
+            }
+        }
         std::string out;
-        for (const auto& msg : messages) {
+        if (!tools.empty()) {
+            out += BOS_TOKEN + "system\n";
+            if (!messages.empty() && messages.front().role == geniex::Role::System) {
+                out += messages.front().content + "\n\n";
+            }
+            out +=
+                "# Tools\n\nYou may call one or more functions to assist with the user query.\n\n"
+                "You are provided with function signatures within XML tags:\n ";
+            for (const auto& tool : tools) {
+                if (!tool.is_object() || !tool.contains("function") || !tool["function"].is_object() ||
+                    !tool["function"].contains("name") || !tool["function"]["name"].is_string()) {
+                    GENIEXPROC_THROW("tools must contain named functions");
+                }
+                const auto definition = tool.dump();
+                if (!image_marker.empty() && definition.find(image_marker) != std::string::npos) {
+                    GENIEXPROC_THROW("tools contain the reserved image_marker");
+                }
+                out += '\n' + definition;
+            }
+            out +=
+                "\n \n\nFor each function call, return a json object with function name and arguments within "
+                "<tool_call></tool_call> XML tags:\n<tool_call>\n"
+                "{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>";
+            out += EOS_TOKEN + "\n";
+        }
+        for (size_t i = 0; i < messages.size(); ++i) {
+            const auto& msg = messages[i];
             // Defensive: reject a literal marker inside user content — would
             // break positional replacement during process().
-            if (!image_marker.empty() &&
-                msg.content.find(image_marker) != std::string::npos) {
-                GENIEXPROC_THROW(
-                    "ChatMessage::content contains the reserved image_marker '" +
-                    std::string(image_marker) + "'");
+            if (!image_marker.empty() && msg.content.find(image_marker) != std::string::npos) {
+                GENIEXPROC_THROW("ChatMessage::content contains the reserved image_marker '" +
+                                 std::string(image_marker) + "'");
+            }
+            if (!tools.empty() && i == 0 && msg.role == geniex::Role::System) continue;
+
+            if (msg.role == geniex::Role::Tool) {
+                if (i == 0 || messages[i - 1].role != geniex::Role::Tool) out += BOS_TOKEN + "user";
+                out += "\n<tool_response>\n";
+                for (size_t j = 0; j < msg.mm_content.size(); ++j) out += image_marker;
+                out += msg.content + "\n</tool_response>";
+                if (i + 1 == messages.size() || messages[i + 1].role != geniex::Role::Tool) out += EOS_TOKEN + "\n";
+                continue;
             }
 
             out += BOS_TOKEN;
             out += role_to_string(msg.role);
             out += '\n';
 
-            for (size_t i = 0; i < msg.mm_content.size(); ++i) {
-                out += image_marker;
-            }
-
+            for (size_t j = 0; j < msg.mm_content.size(); ++j) out += image_marker;
             out += msg.content;
+
+            if (msg.role == geniex::Role::Assistant) {
+                for (size_t j = 0; j < msg.tool_calls.size(); ++j) {
+                    const auto& call = msg.tool_calls[j];
+                    const auto args = call.arguments_json.empty() ? json::object() : json::parse(call.arguments_json);
+                    if (!msg.content.empty() || j > 0) out += '\n';
+                    out += "<tool_call>\n{\"name\": " + json(call.name).dump() + ", \"arguments\": " + args.dump() +
+                           "}\n</tool_call>";
+                }
+            }
             out += EOS_TOKEN;
             out += '\n';
         }
 
-        if (add_generation_prompt) {
+        if (opts.add_generation_prompt) {
             out += BOS_TOKEN;
             out += role_to_string(geniex::Role::Assistant);
             out += '\n';
@@ -264,8 +321,7 @@ geniex::Tokenizer& Qwen2VLProcessor::tokenizer() {
 
 std::string Qwen2VLProcessor::apply_chat_template(const std::vector<geniex::ChatMessage>& messages,
                                                   const geniex::ApplyChatTemplateOptions& opts) const {
-    // Hand-rolled ChatML: only add_generation_prompt is honored; tools are ignored.
-    return impl_->build_template_text(messages, opts.add_generation_prompt, image_marker());
+    return impl_->build_template_text(messages, opts, image_marker());
 }
 
 BatchFeatures Qwen2VLProcessor::process(
