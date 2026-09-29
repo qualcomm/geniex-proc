@@ -25,6 +25,7 @@
 #include <xtensor/misc/xmanipulation.hpp>
 #include <xtensor/views/xview.hpp>
 
+#include "processors/tools.h"
 #include "vision/vision.h"
 
 namespace geniex::qwen2vl {
@@ -147,20 +148,8 @@ struct Qwen2VLProcessor::Impl {
 
     std::string build_template_text(const std::vector<geniex::ChatMessage>& messages,
                                     const geniex::ApplyChatTemplateOptions& opts, std::string_view image_marker) const {
-        json tools = json::array();
-        if (!opts.tools_json.empty()) {
-            tools = json::parse(opts.tools_json);
-            if (!tools.is_array()) GENIEXPROC_THROW("tools_json must be a JSON array");
-        } else {
-            for (const auto& tool : opts.tools) {
-                tools.push_back(
-                    {{"type", "function"},
-                     {"function",
-                      {{"name", tool.name},
-                       {"description", tool.description},
-                       {"parameters", tool.parameters_json.empty() ? json::object() : json::parse(tool.parameters_json)}}}});
-            }
-        }
+        const json tools = geniex::internal::parse_tools<json>(opts);
+        if (!tools.is_array()) GENIEXPROC_THROW("tools_json must be a JSON array");
         std::string out;
         if (!tools.empty()) {
             out += BOS_TOKEN + "system\n";
@@ -214,12 +203,13 @@ struct Qwen2VLProcessor::Impl {
             out += msg.content;
 
             if (msg.role == geniex::Role::Assistant) {
-                for (size_t j = 0; j < msg.tool_calls.size(); ++j) {
-                    const auto& call = msg.tool_calls[j];
+                bool first_call = true;
+                for (const auto& call : msg.tool_calls) {
                     const auto args = call.arguments_json.empty() ? json::object() : json::parse(call.arguments_json);
-                    if (!msg.content.empty() || j > 0) out += '\n';
+                    if (!msg.content.empty() || !first_call) out += '\n';
                     out += "<tool_call>\n{\"name\": " + json(call.name).dump() + ", \"arguments\": " + args.dump() +
                            "}\n</tool_call>";
+                    first_call = false;
                 }
             }
             out += EOS_TOKEN;

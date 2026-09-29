@@ -24,6 +24,7 @@
 #include <xtensor/containers/xarray.hpp>
 #include <xtensor/containers/xtensor.hpp>
 
+#include "processors/tools.h"
 #include "vision/vision.h"
 
 namespace geniex::gemma4 {
@@ -94,22 +95,6 @@ std::string gemmaValue(const json& value, bool schema = false) {
         return out + ']';
     }
     return value.dump();
-}
-
-json parseTools(const geniex::ApplyChatTemplateOptions& opts) {
-    if (!opts.tools_json.empty()) return json::parse(opts.tools_json);
-    json tools = json::array();
-    for (const auto& tool : opts.tools) {
-        tools.push_back(
-            {{"type", "function"},
-             {"function",
-              {
-                  {"name", tool.name},
-                  {"description", tool.description},
-                  {"parameters", tool.parameters_json.empty() ? json::object() : json::parse(tool.parameters_json)},
-              }}});
-    }
-    return tools;
 }
 
 // Aspect-ratio-preserving target size: the largest (h, w) that produces at most
@@ -183,7 +168,7 @@ struct Gemma4Processor::Impl {
 
     std::string build_template_text(const std::vector<geniex::ChatMessage>& messages,
                                     const geniex::ApplyChatTemplateOptions& opts, std::string_view image_marker) const {
-        const json tools = parseTools(opts);
+        const json tools = geniex::internal::parse_tools<json>(opts);
         if (!tools.is_array()) throw std::runtime_error("geniex::gemma4: tools must be an array");
         for (const auto& msg : messages) {
             if (!image_marker.empty() && msg.content.find(image_marker) != std::string::npos) {
