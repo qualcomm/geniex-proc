@@ -481,3 +481,39 @@ TEST(Gemma4Processor, ApplyChatTemplateRejectsLiteralMarkerInContent) {
         p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
         std::runtime_error);
 }
+
+TEST(Gemma4Processor, ApplyChatTemplateTools) {
+    auto p = make_gemma4_processor();
+    geniex::ApplyChatTemplateOptions opts;
+    opts.tools.push_back({"get_weather", "Get weather",
+                          R"({"type":"object","properties":{"city":{"type":"string"}},"required":["city"]})"});
+    const std::vector<geniex::ChatMessage> msgs = {{geniex::Role::User, "Weather?", {}}};
+    EXPECT_EQ(p->apply_chat_template(msgs, opts),
+              "<bos><|turn>system\n"
+              "<|tool>declaration:get_weather{description:<|\"|>Get weather<|\"|>,parameters:"
+              "{properties:{city:{type:<|\"|>STRING<|\"|>}},required:[<|\"|>city<|\"|>],"
+              "type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n"
+              "<|turn>user\nWeather?<turn|>\n<|turn>model\n");
+    opts.tools_json = R"([{"function":{"name":"lookup","description":"Search"}}])";
+    EXPECT_NE(p->apply_chat_template(msgs, opts).find("declaration:lookup{"), std::string::npos);
+}
+
+TEST(Gemma4Processor, ApplyChatTemplateToolRoundTrip) {
+    auto p = make_gemma4_processor();
+    geniex::ChatMessage call{geniex::Role::Assistant, "", {}};
+    call.tool_calls.push_back({"call_1", "get_weather", R"({"city":"Beijing"})"});
+    geniex::ChatMessage response{geniex::Role::Tool, "20 C", {}};
+    response.tool_call_id = "call_1";
+    const std::string expected =
+        "<bos><|turn>model\n<|tool_call>call:get_weather{city:<|\"|>Beijing<|\"|>}<tool_call|>"
+        "<|tool_response>response:get_weather{value:<|\"|>20 C<|\"|>}<tool_response|>";
+    EXPECT_EQ(p->apply_chat_template({call, response}), expected);
+    EXPECT_EQ(p->apply_chat_template({call}),
+              "<bos><|turn>model\n<|tool_call>call:get_weather{city:<|\"|>Beijing<|\"|>}<tool_call|>"
+              "<|tool_response>");
+    response.name = "get_weather";
+    EXPECT_EQ(p->apply_chat_template({response}),
+              "<|tool_response>response:get_weather{value:<|\"|>20 C<|\"|>}<tool_response|>");
+    call.tool_calls[0].arguments_json = "[]";
+    EXPECT_THROW(p->apply_chat_template({call}), std::runtime_error);
+}
