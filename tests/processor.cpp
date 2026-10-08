@@ -180,6 +180,70 @@ TEST(Qwen2VLProcessor, ApplyChatTemplateRejectsLiteralMarkerInContent) {
     EXPECT_THROW(p->apply_chat_template(msgs), std::runtime_error);
 }
 
+TEST(Qwen2VLProcessor, ApplyChatTemplateRendersTools) {
+    auto p = make_processor();
+    if (!p) GTEST_SKIP() << "Tokenizer fixture not present";
+
+    const std::vector<geniex::ChatMessage> msgs = {
+        {geniex::Role::System, "Be concise."},
+        {geniex::Role::User, "Weather in Beijing?"},
+    };
+    const std::string tool =
+        R"({"type":"function","function":{"name":"get_weather","description":"Current weather","parameters":{"type":"object","properties":{"city":{"type":"string"}}}}})";
+    geniex::ApplyChatTemplateOptions from_json;
+    from_json.tools_json = "[" + tool + "]";
+    const auto rendered = p->apply_chat_template(msgs, from_json);
+    EXPECT_EQ(rendered.find("<|im_start|>system\nBe concise.\n\n# Tools"), 0u);
+    EXPECT_NE(rendered.find(tool), std::string::npos);
+    EXPECT_NE(rendered.find("<tool_call>\n{\"name\": <function-name>"), std::string::npos);
+    EXPECT_NE(rendered.find("<|im_end|>\n<|im_start|>user\nWeather in Beijing?"), std::string::npos);
+    EXPECT_TRUE(rendered.ends_with("<|im_start|>assistant\n"));
+
+    geniex::ApplyChatTemplateOptions from_typed;
+    from_typed.tools.push_back(
+        {"get_weather", "Current weather", R"({"type":"object","properties":{"city":{"type":"string"}}})"});
+    EXPECT_EQ(p->apply_chat_template(msgs, from_typed), rendered);
+
+    const std::vector<geniex::ChatMessage> no_system = {{geniex::Role::User, "hi"}};
+    EXPECT_TRUE(p->apply_chat_template(no_system, from_json).starts_with("<|im_start|>system\n# Tools"));
+    geniex::ApplyChatTemplateOptions empty;
+    empty.tools_json = "[]";
+    EXPECT_EQ(p->apply_chat_template(no_system, empty), p->apply_chat_template(no_system));
+}
+
+TEST(Qwen2VLProcessor, ApplyChatTemplateRendersToolConversation) {
+    auto p = make_processor();
+    if (!p) GTEST_SKIP() << "Tokenizer fixture not present";
+
+    geniex::ChatMessage assistant{geniex::Role::Assistant, "Checking"};
+    assistant.tool_calls.push_back({"call_1", "get_weather", R"({"city":"Beijing"})"});
+    assistant.tool_calls.push_back({"call_2", "get_weather", R"({"city":"Paris"})"});
+    const std::vector<geniex::ChatMessage> msgs = {
+        assistant,
+        {geniex::Role::Tool, R"({"temp":20})"},
+        {geniex::Role::Tool, R"({"temp":21})"},
+    };
+    const auto rendered = p->apply_chat_template(msgs);
+    EXPECT_EQ(rendered,
+              "<|im_start|>assistant\nChecking\n"
+              "<tool_call>\n{\"name\": \"get_weather\", \"arguments\": {\"city\":\"Beijing\"}}\n</tool_call>\n"
+              "<tool_call>\n{\"name\": \"get_weather\", \"arguments\": {\"city\":\"Paris\"}}\n</tool_call><|im_end|>\n"
+              "<|im_start|>user\n<tool_response>\n{\"temp\":20}\n</tool_response>"
+              "\n<tool_response>\n{\"temp\":21}\n</tool_response><|im_end|>\n"
+              "<|im_start|>assistant\n");
+}
+
+TEST(Qwen2VLProcessor, ApplyChatTemplateRejectsInvalidTools) {
+    auto p = make_processor();
+    if (!p) GTEST_SKIP() << "Tokenizer fixture not present";
+    const std::vector<geniex::ChatMessage> msgs = {{geniex::Role::User, "hi"}};
+    for (const std::string& tools : {"not-json", "{}", "[{}]"}) {
+        geniex::ApplyChatTemplateOptions opts;
+        opts.tools_json = tools;
+        EXPECT_THROW(p->apply_chat_template(msgs, opts), std::exception);
+    }
+}
+
 // ─── process() — end-to-end on a generated image ─────────────────────────────
 
 namespace {
@@ -416,4 +480,40 @@ TEST(Gemma4Processor, ApplyChatTemplateRejectsLiteralMarkerInContent) {
     EXPECT_THROW(
         p->apply_chat_template(msgs, geniex::ApplyChatTemplateOptions{/*add_generation_prompt=*/true}),
         std::runtime_error);
+}
+
+TEST(Gemma4Processor, ApplyChatTemplateTools) {
+    auto p = make_gemma4_processor();
+    geniex::ApplyChatTemplateOptions opts;
+    opts.tools.push_back({"get_weather", "Get weather",
+                          R"({"type":"object","properties":{"city":{"type":"string"}},"required":["city"]})"});
+    const std::vector<geniex::ChatMessage> msgs = {{geniex::Role::User, "Weather?", {}}};
+    EXPECT_EQ(p->apply_chat_template(msgs, opts),
+              "<bos><|turn>system\n"
+              "<|tool>declaration:get_weather{description:<|\"|>Get weather<|\"|>,parameters:"
+              "{properties:{city:{type:<|\"|>STRING<|\"|>}},required:[<|\"|>city<|\"|>],"
+              "type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n"
+              "<|turn>user\nWeather?<turn|>\n<|turn>model\n");
+    opts.tools_json = R"([{"function":{"name":"lookup","description":"Search"}}])";
+    EXPECT_NE(p->apply_chat_template(msgs, opts).find("declaration:lookup{"), std::string::npos);
+}
+
+TEST(Gemma4Processor, ApplyChatTemplateToolRoundTrip) {
+    auto p = make_gemma4_processor();
+    geniex::ChatMessage call{geniex::Role::Assistant, "", {}};
+    call.tool_calls.push_back({"call_1", "get_weather", R"({"city":"Beijing"})"});
+    geniex::ChatMessage response{geniex::Role::Tool, "20 C", {}};
+    response.tool_call_id = "call_1";
+    const std::string expected =
+        "<bos><|turn>model\n<|tool_call>call:get_weather{city:<|\"|>Beijing<|\"|>}<tool_call|>"
+        "<|tool_response>response:get_weather{value:<|\"|>20 C<|\"|>}<tool_response|>";
+    EXPECT_EQ(p->apply_chat_template({call, response}), expected);
+    EXPECT_EQ(p->apply_chat_template({call}),
+              "<bos><|turn>model\n<|tool_call>call:get_weather{city:<|\"|>Beijing<|\"|>}<tool_call|>"
+              "<|tool_response>");
+    response.name = "get_weather";
+    EXPECT_EQ(p->apply_chat_template({response}),
+              "<|tool_response>response:get_weather{value:<|\"|>20 C<|\"|>}<tool_response|>");
+    call.tool_calls[0].arguments_json = "[]";
+    EXPECT_THROW(p->apply_chat_template({call}), std::runtime_error);
 }

@@ -11,16 +11,20 @@
 #include "geniex-proc/gemma4.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include <xtensor/containers/xadapt.hpp>
 #include <xtensor/containers/xarray.hpp>
 #include <xtensor/containers/xtensor.hpp>
 
+#include "processors/tools.h"
 #include "vision/vision.h"
 
 namespace geniex::gemma4 {
@@ -60,6 +64,37 @@ std::string trim(const std::string& s) {
     const auto  first = s.find_first_not_of(ws);
     if (first == std::string::npos) return {};
     return s.substr(first, s.find_last_not_of(ws) - first + 1);
+}
+
+using json = nlohmann::json;
+
+std::string gemmaValue(const json& value, bool schema = false) {
+    if (value.is_string()) return "<|\"|>" + value.get<std::string>() + "<|\"|>";
+    if (value.is_object()) {
+        std::string out = "{";
+        for (auto it = value.begin(); it != value.end(); ++it) {
+            if (it != value.begin()) out += ',';
+            out += it.key() + ':';
+            if (schema && it.key() == "type" && it.value().is_string()) {
+                auto type = it.value().get<std::string>();
+                std::transform(type.begin(), type.end(), type.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+                out += gemmaValue(type);
+            } else {
+                out += gemmaValue(it.value(), schema);
+            }
+        }
+        return out + '}';
+    }
+    if (value.is_array()) {
+        std::string out = "[";
+        for (size_t i = 0; i < value.size(); ++i) {
+            if (i) out += ',';
+            out += gemmaValue(value[i], schema);
+        }
+        return out + ']';
+    }
+    return value.dump();
 }
 
 // Aspect-ratio-preserving target size: the largest (h, w) that produces at most
@@ -131,48 +166,107 @@ struct Gemma4Processor::Impl {
         }
     }
 
-    // Gemma4 turn framing, hand-rolled as in Qwen2VL / InternVL. Byte-identical
-    // to the bundled Jinja template for the message shapes supported here:
-    //
-    //   <bos>  then per message  <|turn>ROLE\n <markers> <trimmed> <turn|>\n
-    //   then, if add_generation_prompt,  <|turn>model\n
-    //
-    // BOS lands once at the very start, not per turn as in ChatML — so a
-    // multi-turn caller reusing a KV cache must feed only the new turn's delta
-    // and re-emit the previous turn's `<turn|>` itself.
-    //
-    // Narrower than the Jinja it replaces: tool calls and the thinking channel
-    // are not rendered. Nothing drives either today; see the follow-up to move
-    // every VLM processor back onto Jinja.
-    std::string build_template_text(const std::vector<geniex::ChatMessage>& messages, bool add_generation_prompt,
-                                    std::string_view image_marker) const {
-        std::string out = BOS_TOKEN;
+    std::string build_template_text(const std::vector<geniex::ChatMessage>& messages,
+                                    const geniex::ApplyChatTemplateOptions& opts, std::string_view image_marker) const {
+        const json tools = geniex::internal::parse_tools<json>(opts);
+        if (!tools.is_array()) throw std::runtime_error("geniex::gemma4: tools must be an array");
         for (const auto& msg : messages) {
-            // A literal marker here would break positional marker-to-image
-            // pairing in process().
             if (!image_marker.empty() && msg.content.find(image_marker) != std::string::npos) {
                 GENIEXPROC_THROW("ChatMessage::content contains the reserved image_marker '" +
                                  std::string(image_marker) + "'");
             }
-
-            out += TURN_OPEN;
-            out += gemmaRoleName(msg.role);
-            out += '\n';
-
-            // Markers lead the text, matching Gemma's upstream ordering.
-            for (size_t i = 0; i < msg.mm_content.size(); ++i) {
-                out += image_marker;
-            }
-
-            out += trim(msg.content);
-            out += TURN_CLOSE;
-            out += '\n';
         }
 
-        if (add_generation_prompt) {
-            out += TURN_OPEN;
-            out += gemmaRoleName(geniex::Role::Assistant);
-            out += '\n';
+        const bool first_system = !messages.empty() && messages.front().role == geniex::Role::System;
+        const bool system_turn = first_system || !tools.empty();
+        std::string out =
+            !messages.empty() && messages.front().role == geniex::Role::Tool && !system_turn ? "" : BOS_TOKEN;
+        size_t start = 0;
+        if (system_turn) {
+            out += TURN_OPEN + std::string("system\n");
+            if (opts.enable_thinking && !tools.empty()) out += "<|think|>\n";
+            if (first_system) {
+                out += trim(messages.front().content);
+                start = 1;
+            }
+            for (const auto& tool : tools) {
+                const auto& fn = tool.at("function");
+                out += "<|tool>declaration:" + fn.at("name").get<std::string>() + "{description:";
+                out += gemmaValue(fn.value("description", std::string{}));
+                if (fn.contains("parameters") && !fn["parameters"].empty()) {
+                    out += ",parameters:" + gemmaValue(fn["parameters"], true);
+                }
+                out += "}<tool|>";
+            }
+            out += TURN_CLOSE + std::string("\n");
+        }
+
+        std::string pending_content;
+        for (size_t i = start; i < messages.size(); ++i) {
+            const auto& msg = messages[i];
+            if (msg.role == geniex::Role::Tool) {
+                std::string name = msg.name;
+                for (size_t j = i; name.empty() && j-- > start;) {
+                    if (messages[j].role == geniex::Role::Tool) continue;
+                    for (const auto& call : messages[j].tool_calls) {
+                        if (call.id == msg.tool_call_id) {
+                            name = call.name;
+                            break;
+                        }
+                    }
+                    break;
+                }
+                out += "<|tool_response>response:" + (name.empty() ? "unknown" : name);
+                out += "{value:" + gemmaValue(msg.content) + "}<tool_response|>";
+                if (i + 1 == messages.size() || messages[i + 1].role != geniex::Role::Tool) {
+                    out += pending_content;
+                    if (i + 1 < messages.size() && messages[i + 1].role != geniex::Role::Assistant) {
+                        out += TURN_CLOSE + std::string("\n");
+                    } else if (i + 1 == messages.size() && !pending_content.empty()) {
+                        out += TURN_CLOSE + std::string("\n");
+                    }
+                    pending_content.clear();
+                }
+                continue;
+            }
+
+            const bool continue_model =
+                msg.role == geniex::Role::Assistant && i > start && messages[i - 1].role == geniex::Role::Tool;
+            if (!continue_model) {
+                out += TURN_OPEN;
+                out += gemmaRoleName(msg.role);
+                out += '\n';
+            }
+            if (msg.role == geniex::Role::Assistant && !msg.reasoning_content.empty()) {
+                out += "<|channel>thought\n" + msg.reasoning_content + "\n<channel|>";
+            }
+            for (size_t j = 0; j < msg.mm_content.size(); ++j) out += image_marker;
+            for (const auto& call : msg.tool_calls) {
+                const json args = call.arguments_json.empty() ? json::object() : json::parse(call.arguments_json);
+                if (!args.is_object()) throw std::runtime_error("geniex::gemma4: tool arguments must be an object");
+                out += "<|tool_call>call:" + call.name + gemmaValue(args) + "<tool_call|>";
+            }
+            const bool has_calls = !msg.tool_calls.empty();
+            const bool has_reply = has_calls && i + 1 < messages.size() && messages[i + 1].role == geniex::Role::Tool;
+            if (has_reply) {
+                pending_content = trim(msg.content);
+            } else {
+                out += trim(msg.content);
+                if (has_calls)
+                    out += "<|tool_response>";
+                else
+                    out += TURN_CLOSE + std::string("\n");
+            }
+        }
+
+        const bool awaiting_tool =
+            !messages.empty() && (messages.back().role == geniex::Role::Tool || !messages.back().tool_calls.empty());
+        if (opts.add_generation_prompt) {
+            if (awaiting_tool && opts.enable_thinking && !messages.empty() &&
+                messages.back().role == geniex::Role::Tool)
+                out += "<|channel>thought\n";
+            else if (!awaiting_tool)
+                out += TURN_OPEN + std::string("model\n");
         }
         return out;
     }
@@ -273,9 +367,7 @@ const Gemma4Config& Gemma4Processor::config() const { return impl_->config_; }
 
 std::string Gemma4Processor::apply_chat_template(
     const std::vector<geniex::ChatMessage>& messages, const geniex::ApplyChatTemplateOptions& opts) const {
-    // No tokenizer needed: the framing comes from the message list alone.
-    // Hand-rolled template: only add_generation_prompt is honored; tools are ignored.
-    return impl_->build_template_text(messages, opts.add_generation_prompt, image_marker());
+    return impl_->build_template_text(messages, opts, image_marker());
 }
 
 // ============================================================
