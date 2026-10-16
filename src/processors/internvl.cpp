@@ -15,6 +15,7 @@
 #include <xtensor/containers/xarray.hpp>
 #include <xtensor/containers/xtensor.hpp>
 
+#include "internvl_normalize.h"
 #include "vision/vision.h"
 
 namespace geniex::internvl {
@@ -73,18 +74,8 @@ struct InternVLProcessor::Impl {
 
         // Rescale to [0,1], normalize per channel, and transpose HWC -> planar
         // CHW in one pass. The graph takes [1, 3, S, S].
-        const float scale = config_.rescale_factor;
-        for (int c = 0; c < 3; ++c) {
-            const float mean = config_.image_mean[static_cast<size_t>(c)];
-            const float inv_std = 1.0f / config_.image_std[static_cast<size_t>(c)];
-            float* dst = pixels_out + static_cast<size_t>(c) * s * s;
-            for (int y = 0; y < s; ++y) {
-                for (int x = 0; x < s; ++x) {
-                    const float v = static_cast<float>(img(y, x, c)) * scale;
-                    *dst++ = (v - mean) * inv_std;
-                }
-            }
-        }
+        normalize_chw(img.data(), pixels_out, static_cast<size_t>(s) * s, config_.rescale_factor,
+                      config_.image_mean.data(), config_.image_std.data());
     }
 
     // ------------------------------------------------------------------

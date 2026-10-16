@@ -17,7 +17,7 @@ Drivers_Dir = 13
 1 = %DiskId%
 
 [SourceDisksFiles]
-libgeniex-proc-htp-@GENIEXPROC_HTP_DSP_VERSION@.so = 1
+@GENIEXPROC_HTP_SOURCE_FILES@
 
 [ControlFlags]
 ExcludeFromSelect = *
@@ -26,7 +26,7 @@ ExcludeFromSelect = *
 CopyFiles=Drivers_Dir
 
 [Drivers_Dir]
-libgeniex-proc-htp-@GENIEXPROC_HTP_DSP_VERSION@.so,,,0x10
+@GENIEXPROC_HTP_COPY_FILES@
 
 [Strings]
 GENIEXPROC = 'geniex-proc'

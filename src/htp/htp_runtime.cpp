@@ -17,10 +17,7 @@ namespace geniex::htp {
 namespace {
 
 constexpr int kCdspDomain = 3;
-#define GENIEXPROC_HTP_STRINGIFY_IMPL(value) #value
-#define GENIEXPROC_HTP_STRINGIFY(value) GENIEXPROC_HTP_STRINGIFY_IMPL(value)
-constexpr char kSkelUri[] = "file:///libgeniex-proc-htp-" GENIEXPROC_HTP_STRINGIFY(
-    GENIEXPROC_HTP_DSP_VERSION) ".so?geniex_proc_htp_skel_handle_invoke&_modver=1.0&_dom=cdsp";
+constexpr unsigned int kBuiltArchitectures[] = {GENIEXPROC_HTP_ARCHS};
 
 [[noreturn]] void rpc_error(const char* operation, AEEResult result) {
     char code[16];
@@ -28,11 +25,32 @@ constexpr char kSkelUri[] = "file:///libgeniex-proc-htp-" GENIEXPROC_HTP_STRINGI
     throw std::runtime_error(std::string("geniex::htp: ") + operation + " failed with AEEResult " + code);
 }
 
+std::string skel_uri() {
+    fastrpc_capability info = {};
+    info.domain = kCdspDomain;
+    info.attribute_ID = ARCH_VER;
+    const auto result = remote_handle_control(DSPRPC_GET_DSP_INFO, &info, sizeof(info));
+    if (result != AEE_SUCCESS) rpc_error("query DSP architecture", result);
+    const unsigned int value = info.capability & 0xffu;
+    if (value == 0 || (value & 0x0fu) > 9 || (value >> 4) > 9) {
+        throw std::runtime_error("geniex::htp: invalid DSP architecture capability");
+    }
+    const unsigned int architecture = (value >> 4) * 10u + (value & 0x0fu);
+    bool supported = false;
+    for (const auto built : kBuiltArchitectures) supported |= architecture == built;
+    if (!supported) {
+        throw std::runtime_error("geniex::htp: no kernel built for v" + std::to_string(architecture));
+    }
+    return "file:///libgeniex-proc-htp-v" + std::to_string(architecture) +
+           ".so?geniex_proc_htp_skel_handle_invoke&_modver=1.0&_dom=cdsp";
+}
+
 }  // namespace
 
 void open(Session& session) {
     std::lock_guard lock(session.mutex_);
     if (session.handle_ != 0) return;
+    const auto uri = skel_uri();
 
     remote_rpc_control_unsigned_module control = {};
     control.domain = kCdspDomain;
@@ -41,7 +59,7 @@ void open(Session& session) {
     if (control_result != 0) rpc_error("CDSP unsigned-module control", control_result);
 
     remote_handle64 handle = 0;
-    const auto result = geniex_proc_htp_open(kSkelUri, &handle);
+    const auto result = geniex_proc_htp_open(uri.c_str(), &handle);
     if (result != AEE_SUCCESS) rpc_error("open", result);
     session.handle_ = handle;
 }

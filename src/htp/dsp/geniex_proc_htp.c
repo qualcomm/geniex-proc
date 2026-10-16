@@ -7,6 +7,7 @@
 
 #include "AEEStdDef.h"
 #include "AEEStdErr.h"
+#include "normalize_kernel.h"
 #include "remote.h"
 #include "resize_kernel.h"
 
@@ -64,6 +65,18 @@ AEEResult geniex_proc_htp_resize(remote_handle64 handle, int sourceHeight, int s
     const int result =
         geniex_proc_htp_resize_kernel(input, sourceWidth, sourceHeight, output, destinationWidth, destinationHeight);
     if (result == -2) return AEE_ENOMEMORY;
+    if (result == -3) return AEE_EBADSTATE;
+    return result == 0 ? AEE_SUCCESS : AEE_EBADPARM;
+}
+
+AEEResult geniex_proc_htp_normalize(remote_handle64 handle, int pixels, const float* parameters, int parametersLen,
+                                    const uint8* input, int inputLen, float* output, int outputLen) {
+    if (handle != kHtpHandle) return AEE_ENOSUCHHANDLE;
+    if (pixels <= 0 || pixels > INT_MAX / 12 || parametersLen != 7 || !parameters || !input || !output ||
+        inputLen != pixels * 3 || outputLen < 0)
+        return AEE_EBADPARM;
+    if (outputLen < pixels * 3) return AEE_EBUFFERTOOSMALL;
+    const int result = geniex_proc_htp_normalize_kernel(input, output, (size_t)pixels, parameters);
     if (result == -3) return AEE_EBADSTATE;
     return result == 0 ? AEE_SUCCESS : AEE_EBADPARM;
 }

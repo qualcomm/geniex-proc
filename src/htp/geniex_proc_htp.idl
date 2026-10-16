@@ -12,6 +12,8 @@ interface geniex_proc_htp : remote_handle64 {
     AEEResult resize(in int32 source_height, in int32 source_width,
                      in int32 destination_height, in int32 destination_width,
                      in sequence<octet> input, rout sequence<octet> output);
+    AEEResult normalize(in int32 pixels, in sequence<float> parameters,
+                        in sequence<octet> input, rout sequence<float> output);
 };
 
 #endif /* GENIEX_PROC_HTP_IDL */

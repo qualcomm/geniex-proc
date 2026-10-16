@@ -113,9 +113,10 @@ if(GENIEXPROC_ENABLE_VISION)
         target_link_libraries(vision PRIVATE geniex_proc_htp_runtime)
     endif()
 
-    geniexproc_add_test(processor processor.cpp)
+    geniexproc_add_test(processor processor.cpp internvl_normalize.cpp)
     target_link_libraries(processor PRIVATE geniex-proc-vision)
     target_include_directories(processor PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
         ${CMAKE_CURRENT_SOURCE_DIR}/../third-party/stb
     )
 endif()

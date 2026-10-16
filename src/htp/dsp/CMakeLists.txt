@@ -18,6 +18,7 @@ set(_GENIEXPROC_HTP_SKEL_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/geniex_proc_htp_ske
 add_library(${_GENIEXPROC_HTP_SKEL} SHARED
     geniex_proc_htp.c
     resize_kernel.c
+    normalize_kernel.c
     "${_GENIEXPROC_HTP_SKEL_SOURCE}"
 )
 
