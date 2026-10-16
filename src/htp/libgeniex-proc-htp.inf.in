@@ -1,0 +1,33 @@
+; Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+; SPDX-License-Identifier: BSD-3-Clause
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = ComputeAccelerator
+ClassGuid   = {F01A9D53-3FF6-48D2-9F97-C8A7004BE10C}
+Provider    = %GENIEXPROC%
+DriverVer   = 01/01/2026,1.0.0.0
+CatalogFile = libgeniex-proc-htp.cat
+PnpLockDown = 1
+
+[DestinationDirs]
+Drivers_Dir = 13
+
+[SourceDisksNames]
+1 = %DiskId%
+
+[SourceDisksFiles]
+libgeniex-proc-htp-@GENIEXPROC_HTP_DSP_VERSION@.so = 1
+
+[ControlFlags]
+ExcludeFromSelect = *
+
+[DefaultInstall.NTarm64]
+CopyFiles=Drivers_Dir
+
+[Drivers_Dir]
+libgeniex-proc-htp-@GENIEXPROC_HTP_DSP_VERSION@.so,,,0x10
+
+[Strings]
+GENIEXPROC = 'geniex-proc'
+DiskId      = 'geniex-proc HTP kernel library'

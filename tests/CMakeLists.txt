@@ -101,16 +101,41 @@ geniexproc_add_test(stop_matcher stop_matcher.cpp)
 if(GENIEXPROC_ENABLE_VISION)
     geniexproc_add_test(vision
         vision.cpp
-        ${CMAKE_SOURCE_DIR}/src/vision/vision.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/vision/vision.cpp
+        ${_GENIEXPROC_VISION_BACKEND_SOURCES}
     )
     target_include_directories(vision PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/third-party/stb
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third-party/stb
     )
+    if(GENIEXPROC_ENABLE_HTP)
+        target_compile_definitions(vision PRIVATE GENIEXPROC_ENABLE_HTP)
+        target_link_libraries(vision PRIVATE geniex_proc_htp_runtime)
+    endif()
 
     geniexproc_add_test(processor processor.cpp)
     target_link_libraries(processor PRIVATE geniex-proc-vision)
     target_include_directories(processor PRIVATE
-        ${CMAKE_SOURCE_DIR}/third-party/stb
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third-party/stb
     )
+endif()
+
+if(GENIEXPROC_ENABLE_HTP)
+    add_executable(htp htp.cpp)
+    target_link_libraries(htp PRIVATE geniex_proc_htp_runtime GTest::gtest_main)
+    target_include_directories(htp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+    set_target_properties(htp PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    )
+    add_test(NAME htp COMMAND htp)
+    set_tests_properties(htp PROPERTIES
+        TIMEOUT 60
+        LABELS "unit"
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    if(GENIEXPROC_ENABLE_VISION)
+        set_tests_properties(vision processor PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        )
+    endif()
 endif()

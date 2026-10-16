@@ -39,6 +39,12 @@ endif()
 option(GENIEXPROC_ENABLE_VISION "Build image processing + all VLM processors (stb)"                OFF)
 option(GENIEXPROC_ENABLE_AUDIO  "Build audio processing + all Omni processors (libsndfile, soxr, fftw3)" OFF)
 option(GENIEXPROC_ENABLE_VIDEO  "Build video processing (decord, ffmpeg)"                             OFF)
+option(GENIEXPROC_ENABLE_HTP "Build the optional HTP FastRPC backend and v73 DSP skel" OFF)
+
+if(GENIEXPROC_ENABLE_HTP)
+    enable_language(C)
+    add_subdirectory(src/htp)
+endif()
 
 # Keep tokenizers-cpp and xtensor always static regardless of our shared flag
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
@@ -143,8 +149,21 @@ target_link_libraries(geniex-proc PRIVATE geniexproc_minja)
 # ─────────────────────────────────────────────────────────────────────────────
 if(GENIEXPROC_ENABLE_VISION)
     message(STATUS "geniex-proc: Vision support enabled — building geniex-proc-vision (stb, ${_GENIEXPROC_LIB_TYPE})")
+    if(GENIEXPROC_ENABLE_HTP)
+        set(_GENIEXPROC_BACKEND htp)
+    else()
+        set(_GENIEXPROC_BACKEND cpu)
+    endif()
+    file(GLOB _GENIEXPROC_VISION_BACKEND_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/vision/*_${_GENIEXPROC_BACKEND}.cpp"
+    )
+    file(GLOB _GENIEXPROC_PROCESSOR_BACKEND_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/processors/*_${_GENIEXPROC_BACKEND}.cpp"
+    )
     add_library(geniex-proc-vision ${_GENIEXPROC_LIB_TYPE}
         src/vision/vision.cpp
+        ${_GENIEXPROC_VISION_BACKEND_SOURCES}
+        ${_GENIEXPROC_PROCESSOR_BACKEND_SOURCES}
         src/processors/processor.cpp
         src/processors/qwen2vl.cpp
         src/processors/gemma4.cpp
@@ -157,6 +176,10 @@ if(GENIEXPROC_ENABLE_VISION)
     # Propagate the flag so consumers can #ifdef on it
     target_compile_definitions(geniex-proc-vision PUBLIC GENIEXPROC_ENABLE_VISION)
     target_link_libraries(geniex-proc-vision PUBLIC geniex-proc)
+    if(GENIEXPROC_ENABLE_HTP)
+        target_compile_definitions(geniex-proc-vision PRIVATE GENIEXPROC_ENABLE_HTP)
+        target_link_libraries(geniex-proc-vision PRIVATE geniex_proc_htp_runtime)
+    endif()
 endif()
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -11,7 +11,9 @@
 #include <filesystem>
 #include <vector>
 
-#include "stb/stb_static.h"
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_STATIC
+#include "stb/stb_image.h"
 
 namespace geniex::vision {
 
@@ -33,26 +35,11 @@ xt::xtensor<uint8_t, 3> load_image(const std::string& path) {
     return xt::adapt(image_data, std::vector<size_t>{static_cast<size_t>(height), static_cast<size_t>(width), 3UL});
 }
 
-xt::xtensor<uint8_t, 3> resize_image(const xt::xtensor<uint8_t, 3>& image, int resized_height, int resized_width) {
-    int ori_height = static_cast<int>(image.shape(0));
-    int ori_width  = static_cast<int>(image.shape(1));
-
-    size_t resized_size = static_cast<size_t>(resized_height) * resized_width * 3;
-    std::vector<uint8_t> resized_data(resized_size);
-
-    stbir_resize(image.data(), ori_width, ori_height, 0,
-                 resized_data.data(), resized_width, resized_height, 0,
-                 STBIR_RGB, STBIR_TYPE_UINT8, STBIR_EDGE_CLAMP, STBIR_FILTER_CATMULLROM);
-
-    return xt::adapt(resized_data, std::vector<size_t>{static_cast<size_t>(resized_height), static_cast<size_t>(resized_width), 3UL});
-}
-
 std::tuple<int, int> smart_resize(int height, int width, int factor, int min_pixels, int max_pixels) {
     constexpr int MAX_RATIO = 200;
     if (std::max(height, width) / std::min(height, width) > MAX_RATIO) {
-        throw std::runtime_error(
-            "geniex::vision::smart_resize: absolute aspect ratio must be smaller than " +
-            std::to_string(MAX_RATIO));
+        throw std::runtime_error("geniex::vision::smart_resize: absolute aspect ratio must be smaller than " +
+                                 std::to_string(MAX_RATIO));
     }
 
     int h_bar = std::max(factor, round_by_factor(height, factor));
