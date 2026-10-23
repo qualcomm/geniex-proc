@@ -131,6 +131,9 @@ struct GENIEXPROC_API geniex_sampler_params {
 
 namespace geniex {
 
+/// Requested image preprocessing device. Auto reads GENIEX_QAIRT_PREPROCESS_DEVICE.
+enum class PreprocessDevice { Auto, CPU, GPU, NPU };
+
 /// Role of a conversation participant.
 enum class Role {
     System,

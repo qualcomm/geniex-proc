@@ -11,6 +11,7 @@
 
 #include "geniex-proc/qwen2vl.h"
 
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -26,6 +27,7 @@
 #include <xtensor/views/xview.hpp>
 
 #include "processors/tools.h"
+#include "vision/qwen2vl_device.h"
 #include "vision/vision.h"
 
 namespace geniex::qwen2vl {
@@ -59,12 +61,39 @@ struct Qwen2VLProcessor::Impl {
     // Cached xtensor views of mean/std for per-channel normalization
     xt::xtensor<float, 1> image_mean_;
     xt::xtensor<float, 1> image_std_;
+#ifdef GENIEXPROC_ENABLE_OPENCL
+    std::unique_ptr<geniex::vision::Qwen2VLGpu> gpu_;
+#endif
 
     explicit Impl(const std::string& tokenizer_path, const Qwen2VLConfig& config)
         : tokenizer_(geniex::Tokenizer::from_file(tokenizer_path)),
           config_(config),
           image_mean_(xt::adapt(config.image_mean)),
-          image_std_(xt::adapt(config.image_std)) {}
+          image_std_(xt::adapt(config.image_std)) {
+        if (config.image_mean.size() != 3 || config.image_std.size() != 3) {
+            throw std::invalid_argument("Qwen2VL image mean/std must have three channels");
+        }
+        config_.preprocess_device = geniex::vision::resolve_preprocess_device(config.preprocess_device);
+        switch (config_.preprocess_device) {
+            case PreprocessDevice::CPU:
+                break;
+            case PreprocessDevice::GPU:
+#ifdef GENIEXPROC_ENABLE_OPENCL
+                gpu_ = std::make_unique<geniex::vision::Qwen2VLGpu>();
+                break;
+#else
+                throw std::runtime_error("Qwen2VL GPU preprocessing requires GENIEXPROC_ENABLE_OPENCL");
+#endif
+            case PreprocessDevice::NPU:
+#ifdef GENIEXPROC_ENABLE_HTP
+                break;
+#else
+                throw std::runtime_error("Qwen2VL NPU preprocessing requires GENIEXPROC_ENABLE_HTP");
+#endif
+            default:
+                throw std::invalid_argument("Unknown Qwen2VL preprocess device");
+        }
+    }
 
     // ------------------------------------------------------------------
     // Image preprocessing — mirrors qwen2vl-proc.cpp / qwen3-vl.cpp
@@ -74,13 +103,25 @@ struct Qwen2VLProcessor::Impl {
     /// Returns: (patches [grid_t*grid_h*grid_w, C*T*P*P], grid_thw [1, 3])
     std::tuple<xt::xarray<float>, xt::xarray<size_t>>
     preprocess_single_image(const xt::xtensor<uint8_t, 3>& image) const {
+        if (config_.preprocess_device != PreprocessDevice::CPU) {
+            const auto max_int = static_cast<size_t>(std::numeric_limits<int>::max());
+            if (image.shape(0) == 0 || image.shape(1) == 0 || image.shape(0) > max_int || image.shape(1) > max_int ||
+                config_.patch_size <= 0 || config_.merge_size <= 0 || config_.temporal_patch_size <= 0 ||
+                config_.patch_size > std::numeric_limits<int>::max() / config_.merge_size) {
+                throw std::invalid_argument("Qwen2VL accelerator invalid image dimensions or patch configuration");
+            }
+            if (!(config_.fixed_height > 0 && config_.fixed_width > 0) &&
+                (config_.min_pixels <= 0 || config_.max_pixels < config_.min_pixels ||
+                 config_.max_pixels > std::numeric_limits<int>::max())) {
+                throw std::invalid_argument("Qwen2VL accelerator invalid smart_resize pixel limits");
+            }
+        }
         int height = static_cast<int>(image.shape(0));
         int width  = static_cast<int>(image.shape(1));
         int resized_height = height;
         int resized_width  = width;
 
         // 1. Resize
-        xt::xtensor<uint8_t, 3> processed = image;
         if (config_.fixed_height > 0 && config_.fixed_width > 0) {
             // Fixed-shape mode: ignore aspect ratio and resize to the exact fixed size.
             resized_height = config_.fixed_height;
@@ -92,49 +133,70 @@ struct Qwen2VLProcessor::Impl {
                 static_cast<int>(config_.min_pixels),
                 static_cast<int>(config_.max_pixels));
         }
-        processed = geniex::vision::resize_image(image, resized_height, resized_width);
-
-        // 2. Cast to float, rescale, normalize
-        xt::xtensor<float, 3> img_float = xt::cast<float>(processed);
-        img_float = img_float * config_.rescale_factor;
-
-        for (int c = 0; c < 3; ++c) {
-            xt::view(img_float, xt::all(), xt::all(), c) =
-                (xt::view(img_float, xt::all(), xt::all(), c) - image_mean_(c)) / image_std_(c);
+        // 2. Resize and normalize. Accelerators retain the resized image on
+        // device until normalization; BatchFeatures still requires host floats.
+        xt::xtensor<float, 3> img_chw;
+        xt::xarray<float> flat;
+        bool patches_on_device = false;
+        if (config_.preprocess_device == PreprocessDevice::CPU) {
+            auto processed = geniex::vision::resize_image(image, resized_height, resized_width);
+            xt::xtensor<float, 3> img_float = xt::cast<float>(processed);
+            img_float = img_float * config_.rescale_factor;
+            for (int c = 0; c < 3; ++c) {
+                xt::view(img_float, xt::all(), xt::all(), c) =
+                    (xt::view(img_float, xt::all(), xt::all(), c) - image_mean_(c)) / image_std_(c);
+            }
+            img_chw = xt::transpose(img_float, {2, 0, 1});
         }
-
-        // 3. HWC → CHW, add temporal dimension, tile
-        xt::xtensor<float, 3> img_chw = xt::transpose(img_float, {2, 0, 1});
-        // shape: [1, C, H, W]
-        xt::xarray<float> patches = xt::view(img_chw, xt::newaxis(), xt::all(), xt::all(), xt::all());
-        // tile to [temporal_patch_size, C, H, W] — xt::repeat repeats the single axis-0 element T times
-        patches = xt::eval(xt::repeat(patches, static_cast<size_t>(config_.temporal_patch_size), 0));
-
-        size_t channels = patches.shape(1);
-        size_t grid_t   = patches.shape(0) / config_.temporal_patch_size;
+#ifdef GENIEXPROC_ENABLE_OPENCL
+        else if (config_.preprocess_device == PreprocessDevice::GPU) {
+            flat = gpu_->preprocess_patches(image, resized_height, resized_width, config_.rescale_factor,
+                                            config_.image_mean.data(), config_.image_std.data(), config_.patch_size,
+                                            config_.merge_size, config_.temporal_patch_size);
+            patches_on_device = true;
+        }
+#endif
+#ifdef GENIEXPROC_ENABLE_HTP
+        else if (config_.preprocess_device == PreprocessDevice::NPU) {
+            flat = geniex::vision::preprocess_qwen2vl_htp_patches(
+                image, resized_height, resized_width, config_.rescale_factor, config_.image_mean.data(),
+                config_.image_std.data(), config_.patch_size, config_.merge_size, config_.temporal_patch_size);
+            patches_on_device = true;
+        }
+#endif
+        size_t grid_t   = 1;
         size_t grid_h   = static_cast<size_t>(resized_height) / config_.patch_size;
         size_t grid_w   = static_cast<size_t>(resized_width)  / config_.patch_size;
+        if (!patches_on_device) {
+            // Add temporal dimension, tile, and extract patches.
+            // shape: [1, C, H, W]
+            xt::xarray<float> patches = xt::view(img_chw, xt::newaxis(), xt::all(), xt::all(), xt::all());
+            // xt::repeat repeats the single axis-0 element T times.
+            patches = xt::eval(xt::repeat(patches, static_cast<size_t>(config_.temporal_patch_size), 0));
 
-        // 4. Reshape + transpose for patch extraction
-        // [grid_t, T, C, grid_h/ms, ms, P, grid_w/ms, ms, P]
-        patches = patches.reshape({
-            grid_t,
-            static_cast<size_t>(config_.temporal_patch_size),
-            channels,
-            grid_h / config_.merge_size,
-            static_cast<size_t>(config_.merge_size),
-            static_cast<size_t>(config_.patch_size),
-            grid_w / config_.merge_size,
-            static_cast<size_t>(config_.merge_size),
-            static_cast<size_t>(config_.patch_size),
-        });
-        patches = xt::transpose(patches, {0, 3, 6, 4, 7, 2, 1, 5, 8});
+            const size_t channels = patches.shape(1);
+            grid_t = patches.shape(0) / config_.temporal_patch_size;
 
-        // 5. Flatten to [n_patches, C*T*P*P]
-        xt::xarray<float> flat = patches.reshape({
-            grid_t * grid_h * grid_w,
-            channels * config_.temporal_patch_size * config_.patch_size * config_.patch_size,
-        });
+            // [grid_t, T, C, grid_h/ms, ms, P, grid_w/ms, ms, P]
+            patches = patches.reshape({
+                grid_t,
+                static_cast<size_t>(config_.temporal_patch_size),
+                channels,
+                grid_h / config_.merge_size,
+                static_cast<size_t>(config_.merge_size),
+                static_cast<size_t>(config_.patch_size),
+                grid_w / config_.merge_size,
+                static_cast<size_t>(config_.merge_size),
+                static_cast<size_t>(config_.patch_size),
+            });
+            patches = xt::transpose(patches, {0, 3, 6, 4, 7, 2, 1, 5, 8});
+
+            // Flat [n_patches, C*T*P*P] layout consumed by BatchFeatures.
+            flat = patches.reshape({
+                grid_t * grid_h * grid_w,
+                channels * config_.temporal_patch_size * config_.patch_size * config_.patch_size,
+            });
+        }
 
         xt::xarray<size_t> grid_thw = xt::adapt(
             std::vector<size_t>{grid_t, grid_h, grid_w}, {1UL, 3UL});
@@ -325,7 +387,9 @@ BatchFeatures Qwen2VLProcessor::process(
 
     for (const auto& path : image_paths) {
         auto image = geniex::vision::load_image(path);
-        auto [patches, grid_thw] = impl_->preprocess_single_image(image);
+        xt::xarray<float> patches;
+        xt::xarray<size_t> grid_thw;
+        std::tie(patches, grid_thw) = impl_->preprocess_single_image(image);
 
         // grid_thw shape [1, 3]: (T, H, W)
         size_t grid_t = grid_thw(0, 0);
@@ -333,7 +397,7 @@ BatchFeatures Qwen2VLProcessor::process(
         size_t grid_w = grid_thw(0, 2);
         image_patch_counts.push_back(grid_t * grid_h * grid_w);
 
-        if (pixel_values.shape().size() == 0) {
+        if (pixel_values.shape().size() == 0 && image_grid_thw.shape().size() == 0) {
             pixel_values    = patches;
             image_grid_thw  = grid_thw;
         } else {

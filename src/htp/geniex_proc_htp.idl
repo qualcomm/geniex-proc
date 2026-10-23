@@ -1,0 +1,18 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
+#ifndef GENIEX_PROC_HTP_IDL
+#define GENIEX_PROC_HTP_IDL
+
+#include "AEEStdDef.idl"
+#include "remote.idl"
+
+interface geniex_proc_htp : remote_handle64 {
+    AEEResult qwen2vl_resize_patches(in int32 source_height, in int32 source_width,
+                                     in int32 destination_height, in int32 destination_width,
+                                     in int32 patch_size, in int32 merge_size, in int32 temporal_patch_size,
+                                     in sequence<float> parameters, in sequence<octet> input,
+                                     rout sequence<float> output);
+};
+
+#endif /* GENIEX_PROC_HTP_IDL */
