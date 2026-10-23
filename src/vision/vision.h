@@ -9,6 +9,7 @@
 // Requires GENIEXPROC_ENABLE_VISION to be compiled.
 
 #include <cmath>
+#include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -16,7 +17,13 @@
 #include <xtensor/containers/xadapt.hpp>
 #include <xtensor/containers/xtensor.hpp>
 
+#include "geniex-proc/types.h"
+
 namespace geniex::vision {
+
+PreprocessDevice resolve_preprocess_device(PreprocessDevice requested);
+size_t checked_product(size_t left, size_t right, const char* error);
+size_t rgb_image_bytes(size_t height, size_t width, size_t element_size);
 
 // ============================================================
 // Image loading

@@ -113,4 +113,17 @@ if(GENIEXPROC_ENABLE_VISION)
     target_include_directories(processor PRIVATE
         ${CMAKE_SOURCE_DIR}/third-party/stb
     )
+
+    geniexproc_add_test(qwen2vl_device qwen2vl_device.cpp)
+    target_link_libraries(qwen2vl_device PRIVATE geniex-proc-vision)
+    target_include_directories(qwen2vl_device PRIVATE
+        ${CMAKE_SOURCE_DIR}/third-party/stb
+    )
+    if(GENIEXPROC_ENABLE_OPENCL)
+        target_compile_definitions(qwen2vl_device PRIVATE GENIEXPROC_TEST_ENABLE_OPENCL)
+    endif()
+    if(GENIEXPROC_ENABLE_HTP)
+        target_compile_definitions(qwen2vl_device PRIVATE GENIEXPROC_TEST_ENABLE_HTP)
+    endif()
+
 endif()

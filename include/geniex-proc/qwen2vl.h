@@ -36,6 +36,10 @@ struct GENIEXPROC_API Qwen2VLConfig {
     // resized to exactly (fixed_height x fixed_width), ignoring aspect ratio.
     int     fixed_height      = 0;
     int     fixed_width       = 0;
+
+    // Auto uses GENIEX_QAIRT_PREPROCESS_DEVICE (default CPU). GPU requires
+    // GENIEXPROC_ENABLE_OPENCL; NPU requires GENIEXPROC_ENABLE_HTP.
+    PreprocessDevice preprocess_device = PreprocessDevice::Auto;
 };
 
 // ============================================================

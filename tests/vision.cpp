@@ -3,7 +3,10 @@
 //
 // Unit tests for src/vision/vision.h helpers.
 
+#include <cstdlib>
+#include <limits>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 
 #include <gtest/gtest.h>
@@ -11,6 +14,80 @@
 #include "vision/vision.h"
 
 namespace v = geniex::vision;
+
+namespace {
+class ScopedPreprocessDeviceEnv {
+   public:
+    explicit ScopedPreprocessDeviceEnv(const char* value) {
+        const char* previous = std::getenv("GENIEX_QAIRT_PREPROCESS_DEVICE");
+        had_previous_ = previous != nullptr;
+        if (previous) previous_ = previous;
+        set(value);
+    }
+
+    ~ScopedPreprocessDeviceEnv() { set(had_previous_ ? previous_.c_str() : nullptr); }
+
+   private:
+    static void set(const char* value) {
+#ifdef _WIN32
+        _putenv_s("GENIEX_QAIRT_PREPROCESS_DEVICE", value ? value : "");
+#else
+        if (value)
+            setenv("GENIEX_QAIRT_PREPROCESS_DEVICE", value, 1);
+        else
+            unsetenv("GENIEX_QAIRT_PREPROCESS_DEVICE");
+#endif
+    }
+
+    bool had_previous_ = false;
+    std::string previous_;
+};
+}  // namespace
+
+TEST(VisionPreprocessDevice, ResolvesEnvironmentAndExplicitOverride) {
+    using geniex::PreprocessDevice;
+    {
+        ScopedPreprocessDeviceEnv env(nullptr);
+        EXPECT_EQ(v::resolve_preprocess_device(PreprocessDevice::Auto), PreprocessDevice::CPU);
+    }
+    for (const char* value : {"", "auto", "cpu"}) {
+        ScopedPreprocessDeviceEnv env(value);
+        EXPECT_EQ(v::resolve_preprocess_device(PreprocessDevice::Auto), PreprocessDevice::CPU);
+    }
+    {
+        ScopedPreprocessDeviceEnv env("GpU");
+        EXPECT_EQ(v::resolve_preprocess_device(PreprocessDevice::Auto), PreprocessDevice::GPU);
+    }
+    {
+        ScopedPreprocessDeviceEnv env("NpU");
+        EXPECT_EQ(v::resolve_preprocess_device(PreprocessDevice::Auto), PreprocessDevice::NPU);
+    }
+    {
+        ScopedPreprocessDeviceEnv env("invalid");
+        EXPECT_THROW(v::resolve_preprocess_device(PreprocessDevice::Auto), std::invalid_argument);
+        EXPECT_EQ(v::resolve_preprocess_device(PreprocessDevice::GPU), PreprocessDevice::GPU);
+    }
+}
+
+TEST(VisionImageBytes, ComputesRgbInputAndFloatScratchSizes) {
+    EXPECT_EQ(v::rgb_image_bytes(2, 3, sizeof(uint8_t)), 18u);
+    EXPECT_EQ(v::rgb_image_bytes(2, 3, sizeof(float)), 72u);
+    EXPECT_EQ(v::checked_product(6, 7, "product overflow"), 42u);
+}
+
+TEST(VisionImageBytes, RejectsInvalidDimensionsAndOverflow) {
+    EXPECT_THROW(v::rgb_image_bytes(0, 3, sizeof(uint8_t)), std::invalid_argument);
+    EXPECT_THROW(v::rgb_image_bytes(3, 0, sizeof(uint8_t)), std::invalid_argument);
+    EXPECT_THROW(v::rgb_image_bytes(static_cast<size_t>(-1), 3, sizeof(uint8_t)), std::invalid_argument);
+    EXPECT_THROW(v::rgb_image_bytes(static_cast<size_t>(std::numeric_limits<int>::max()) + 1, 3,
+                                    sizeof(uint8_t)),
+                 std::invalid_argument);
+    EXPECT_THROW(v::rgb_image_bytes(static_cast<size_t>(std::numeric_limits<int>::max()),
+                                    static_cast<size_t>(std::numeric_limits<int>::max()), sizeof(float)),
+                 std::invalid_argument);
+    EXPECT_THROW(v::checked_product(std::numeric_limits<size_t>::max(), 2, "product overflow"),
+                 std::invalid_argument);
+}
 
 // ─── round_by_factor / ceil_by_factor / floor_by_factor ──────────────────────
 

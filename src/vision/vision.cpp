@@ -7,13 +7,49 @@
 
 #include "vision.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <limits>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "stb/stb_static.h"
 
 namespace geniex::vision {
+
+PreprocessDevice resolve_preprocess_device(PreprocessDevice requested) {
+    if (requested != PreprocessDevice::Auto) return requested;
+    const char* value = std::getenv("GENIEX_QAIRT_PREPROCESS_DEVICE");
+    if (!value || !*value) return PreprocessDevice::CPU;
+    std::string device = value;
+    std::transform(device.begin(), device.end(), device.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (device == "auto" || device == "cpu") return PreprocessDevice::CPU;
+    if (device == "gpu") return PreprocessDevice::GPU;
+    if (device == "npu") return PreprocessDevice::NPU;
+    throw std::invalid_argument("Invalid GENIEX_QAIRT_PREPROCESS_DEVICE: " + device);
+}
+
+size_t checked_product(size_t left, size_t right, const char* error) {
+    if (right != 0 && left > std::numeric_limits<size_t>::max() / right) {
+        throw std::invalid_argument(error);
+    }
+    return left * right;
+}
+
+size_t rgb_image_bytes(size_t height, size_t width, size_t element_size) {
+    if (height == 0 || width == 0 || height > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+        width > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        throw std::invalid_argument("geniex::vision::rgb_image_bytes: dimensions must be nonzero and fit in int range");
+    }
+    const size_t pixels = checked_product(height, width, "geniex::vision::rgb_image_bytes: pixel count overflow");
+    const size_t rgb_bytes = checked_product(pixels, 3, "geniex::vision::rgb_image_bytes: RGB byte count overflow");
+    return checked_product(rgb_bytes, element_size, "geniex::vision::rgb_image_bytes: image byte size overflow");
+}
 
 xt::xtensor<uint8_t, 3> load_image(const std::string& path) {
     if (!std::filesystem::exists(path)) {

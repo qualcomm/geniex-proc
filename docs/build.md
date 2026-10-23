@@ -44,8 +44,16 @@ geniex-proc uses CMake options to control which features and modules to build:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `GENIEXPROC_ENABLE_VISION` | `OFF` | Build image processing + all VLM processors (stb) |
+| `GENIEXPROC_ENABLE_OPENCL` | `OFF` | Enable Qwen2VL OpenCL GPU preprocessing; requires an OpenCL SDK at build time and a GPU at runtime. |
+| `GENIEXPROC_ENABLE_HTP` | `OFF` | Enable Qwen2VL Hexagon HTP preprocessing; currently Windows-only, requires a Hexagon SDK and a device FastRPC runtime. |
 | `GENIEXPROC_ENABLE_AUDIO` | `OFF` | Build audio processing + all Omni processors (libsndfile, soxr, fftw3) |
 | `GENIEXPROC_ENABLE_VIDEO` | `OFF` | Build video processing (decord, ffmpeg) |
+
+When building geniex SDK with the Snapdragon CMake preset, also pass `-DGENIEXPROC_ENABLE_OPENCL=ON -DGENIEXPROC_ENABLE_HTP=ON` to enable both Qwen2VL backends. The preset's `GGML_OPENCL=ON` enables llama.cpp OpenCL, **not** geniex-proc OpenCL; the proc options default to OFF.
+
+Qwen2VL remains on CPU by default. For an unmodified geniex/QAIRT application, set `GENIEX_QAIRT_PREPROCESS_DEVICE=cpu|gpu|npu|auto` **before launching** the process; `auto` (and an unset variable) means CPU. Only Qwen2VL reads this setting, at `Qwen2VLProcessor::create`. Callers can set `Qwen2VLConfig::preprocess_device` to `CPU`, `GPU`, or `NPU` to override the environment; the default `Auto` reads it. Unsupported backends and invalid values raise an error rather than falling back to CPU. The decoded image is uploaded to OpenCL once; resize and normalization share device memory, and the GPU writes the final patch-ordered float32 output before returning it to the host. HTP fuses resize, normalization, and patch packing in one FastRPC call. Neither backend provides GPU/NPU zero-copy: `BatchFeatures` and the QNN input still require host data.
+
+`geniex::PreprocessDevice` is a shared type and environment resolution lives in shared vision utilities, but accelerated preprocessing is currently supported only by Qwen2VL. The `qwen2vl_*` vision backend files are intentionally model-specific because their kernels produce Qwen2VL's temporal/merge-aware patch layout, not a generic image output.
 
 ## Platform-Specific Instructions
 
@@ -147,6 +155,14 @@ cmake -B build -DGENIEXPROC_INSTALL=ON
 cmake --build build
 cmake --install build --prefix /path/to/install
 ```
+
+With `GENIEXPROC_ENABLE_HTP=ON`, build first, then install the HTP runtime payload independently (also works with `GENIEXPROC_INSTALL=OFF`):
+
+```bash
+cmake --install build --prefix /path/to/install --component geniex-proc-htp
+```
+
+The component requires both build-produced v73/v81 skels and installs them under `bin/geniex-proc-htp`; when signing is configured, it also installs the matching `.cat` and `.inf`. `GENIEXPROC_HTP_CDSPRPC_DLL` optionally adds `libcdsprpc.dll`. An unsigned component install removes any previously installed proc `.cat`/`.inf`; if HTP is disabled, invoking the same component removes the proc HTP payload directory. This component contains only HTP runtime payload files, not the proc libraries or SDK/plugin dependencies; the consuming SDK/plugin chooses any final runtime or DSP search destination.
 
 ## Testing
 
