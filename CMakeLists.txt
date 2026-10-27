@@ -39,6 +39,52 @@ endif()
 option(GENIEXPROC_ENABLE_VISION "Build image processing + all VLM processors (stb)"                OFF)
 option(GENIEXPROC_ENABLE_AUDIO  "Build audio processing + all Omni processors (libsndfile, soxr, fftw3)" OFF)
 option(GENIEXPROC_ENABLE_VIDEO  "Build video processing (decord, ffmpeg)"                             OFF)
+option(GENIEXPROC_ENABLE_OPENCL "Build OpenCL image preprocessing"                       OFF)
+option(GENIEXPROC_ENABLE_HTP "Build Hexagon HTP image preprocessing"                         OFF)
+
+include(GNUInstallDirs)
+macro(geniexproc_install_htp_cleanup)
+    if(IS_ABSOLUTE "${CMAKE_INSTALL_BINDIR}")
+        set(_geniexproc_htp_install_dir "\$ENV{DESTDIR}${CMAKE_INSTALL_BINDIR}/geniex-proc-htp")
+    else()
+        set(_geniexproc_htp_install_dir "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/geniex-proc-htp")
+    endif()
+    install(CODE
+        "set(_geniexproc_htp_dir \"${_geniexproc_htp_install_dir}\")
+        file(GLOB _geniexproc_htp_skels \"\${_geniexproc_htp_dir}/libgeniex-proc-htp-v*.so\")
+        file(REMOVE \${_geniexproc_htp_skels}
+            \"\${_geniexproc_htp_dir}/libgeniex-proc-htp.cat\"
+            \"\${_geniexproc_htp_dir}/libgeniex-proc-htp.inf\"
+            \"\${_geniexproc_htp_dir}/libcdsprpc.dll\"
+        )"
+        COMPONENT geniex-proc-htp
+    )
+endmacro()
+
+if(GENIEXPROC_ENABLE_OPENCL OR GENIEXPROC_ENABLE_HTP)
+    if(NOT GENIEXPROC_ENABLE_VISION)
+        message(FATAL_ERROR "Device preprocessing requires GENIEXPROC_ENABLE_VISION")
+    endif()
+endif()
+if(GENIEXPROC_ENABLE_OPENCL)
+    if(NOT OpenCL_ROOT AND DEFINED ENV{OPENCL_SDK_ROOT})
+        set(OpenCL_ROOT "$ENV{OPENCL_SDK_ROOT}")
+    endif()
+    if(POLICY CMP0074)
+        cmake_policy(SET CMP0074 NEW)
+    endif()
+    find_package(OpenCL REQUIRED)
+endif()
+if(GENIEXPROC_ENABLE_HTP)
+    enable_language(C)
+    if(NOT HEXAGON_SDK_ROOT AND DEFINED ENV{HEXAGON_SDK_ROOT})
+        set(HEXAGON_SDK_ROOT "$ENV{HEXAGON_SDK_ROOT}")
+    endif()
+    if(NOT HEXAGON_TOOLS_ROOT AND DEFINED ENV{HEXAGON_TOOLS_ROOT})
+        set(HEXAGON_TOOLS_ROOT "$ENV{HEXAGON_TOOLS_ROOT}")
+    endif()
+    add_subdirectory(src/vision/npu)
+endif()
 
 # Keep tokenizers-cpp and xtensor always static regardless of our shared flag
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
@@ -145,12 +191,33 @@ if(GENIEXPROC_ENABLE_VISION)
     message(STATUS "geniex-proc: Vision support enabled — building geniex-proc-vision (stb, ${_GENIEXPROC_LIB_TYPE})")
     add_library(geniex-proc-vision ${_GENIEXPROC_LIB_TYPE}
         src/vision/vision.cpp
+        src/vision/qwen2vl.cpp
+        src/vision/preprocess_device.cpp
+        src/vision/cpu/image_ops.cpp
         src/processors/processor.cpp
         src/processors/qwen2vl.cpp
         src/processors/gemma4.cpp
         src/processors/internvl.cpp
     )
     geniexproc_configure_target(geniex-proc-vision)
+    if(GENIEXPROC_ENABLE_OPENCL)
+        target_sources(geniex-proc-vision PRIVATE
+            src/vision/gpu/gpu_runtime.cpp
+            src/vision/gpu/image_ops.cpp
+            src/vision/gpu/qwen2vl_patches.cpp
+        )
+        target_link_libraries(geniex-proc-vision PRIVATE OpenCL::OpenCL)
+        target_compile_definitions(geniex-proc-vision PRIVATE GENIEXPROC_ENABLE_OPENCL)
+    endif()
+    if(GENIEXPROC_ENABLE_HTP)
+        target_sources(geniex-proc-vision PRIVATE
+            src/vision/npu/npu_runtime.cpp
+            src/vision/npu/image_ops.cpp
+            src/vision/npu/qwen2vl_patches.cpp
+        )
+        target_link_libraries(geniex-proc-vision PRIVATE geniex_proc_htp_runtime)
+        target_compile_definitions(geniex-proc-vision PRIVATE GENIEXPROC_ENABLE_HTP)
+    endif()
     target_include_directories(geniex-proc-vision PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third-party/stb
     )
@@ -178,6 +245,10 @@ endif()
 # ─────────────────────────────────────────────────────────────────────────────
 # Install
 # ─────────────────────────────────────────────────────────────────────────────
+if(NOT GENIEXPROC_ENABLE_HTP)
+    geniexproc_install_htp_cleanup()
+endif()
+
 if(GENIEXPROC_INSTALL)
     set(_INSTALL_TARGETS geniex-proc tokenizers_cpp xtl xtensor xtensor-io xtensor-blas)
     if(GENIEXPROC_ENABLE_VISION)

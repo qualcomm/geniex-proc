@@ -1,0 +1,9 @@
+# Qwen2VL Hexagon HTP preprocessing
+
+`GENIEXPROC_ENABLE_HTP=ON` supports Windows ARM64, Linux ARM64, and Android arm64-v8a. It requires `HEXAGON_SDK_ROOT`, `HEXAGON_TOOLS_ROOT`, and a compatible device FastRPC runtime; see [build instructions](../../../docs/build.md) for DSP architecture defaults and overrides.
+
+Install the selected DSP payload with `cmake --install build --prefix <prefix> --component geniex-proc-htp`; it works with `GENIEXPROC_INSTALL=OFF` and installs under `bin/geniex-proc-htp`. Windows may sign the selected catalog/INF with `GENIEXPROC_HTP_CERT` or a thumbprint (optional PFX password: `GENIEXPROC_HTP_CERT_PASS`) and optionally install `GENIEXPROC_HTP_CDSPRPC_DLL` as `libcdsprpc.dll`. Linux/Android require a system FastRPC runtime; CMake selects the SDK's target `libcdsprpc.so` or accepts `GENIEXPROC_HTP_FASTRPC_LIBRARY`, but the component does not install that library. The component removes only proc-owned payload files. Consumers can query `GENIEXPROC_HTP_SKEL_FILES` on `geniex_proc_htp_runtime` to stage the selected skels.
+
+A QAIRT library override replaces `ADSP_LIBRARY_PATH`; place the skel in the final DSP search path rather than relying on an additional environment path. On Windows, an HTP-enabled vision DLL imports `libcdsprpc.dll` even for CPU/GPU selection; make a compatible DLL available beside the plugin or through `AddDllDirectory` (`PATH` alone may not satisfy the plugin loader).
+
+Qwen2VL uses one synchronous fused RPC for resize, normalization, and patch packing, returning host-float patches. Input and output cross the host/DSP boundary, so this is not zero-copy preprocessing and no end-to-end speedup is established. Catalog signing alone does not establish device security policy; validate the installed driver and DSP chain. See [build and test instructions](../../../docs/build.md) for backend selection and the common device test.

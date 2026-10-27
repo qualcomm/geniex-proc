@@ -44,8 +44,14 @@ geniex-proc uses CMake options to control which features and modules to build:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `GENIEXPROC_ENABLE_VISION` | `OFF` | Build image processing + all VLM processors (stb) |
+| `GENIEXPROC_ENABLE_OPENCL` | `OFF` | Build the OpenCL image backend (OpenCL SDK required; GPU required at runtime). |
+| `GENIEXPROC_ENABLE_HTP` | `OFF` | Build HTP on Windows/Linux ARM64 or Android arm64-v8a (matching Hexagon SDK/tools and device FastRPC required). |
 | `GENIEXPROC_ENABLE_AUDIO` | `OFF` | Build audio processing + all Omni processors (libsndfile, soxr, fftw3) |
 | `GENIEXPROC_ENABLE_VIDEO` | `OFF` | Build video processing (decord, ffmpeg) |
+
+The Snapdragon SDK preset needs `-DGENIEXPROC_ENABLE_OPENCL=ON -DGENIEXPROC_ENABLE_HTP=ON` for both proc backends; `GGML_OPENCL=ON` enables llama.cpp OpenCL only.
+
+Qwen2VL defaults to CPU. Before launch, `GENIEX_QAIRT_PREPROCESS_DEVICE=cpu|gpu|npu|auto` selects a backend (`auto`/unset means CPU); `Qwen2VLConfig::preprocess_device` overrides the environment. Invalid choices and unavailable backends fail without fallback. Other processors ignore this setting.
 
 ## Platform-Specific Instructions
 
@@ -148,7 +154,23 @@ cmake --build build
 cmake --install build --prefix /path/to/install
 ```
 
+With `GENIEXPROC_ENABLE_HTP=ON`, build first, then install the HTP runtime payload independently (also works with `GENIEXPROC_INSTALL=OFF`):
+
+```bash
+cmake --install build --prefix /path/to/install --component geniex-proc-htp
+```
+
+The component installs selected skels to `bin/geniex-proc-htp`; Windows may sign/install the matching `.cat`/`.inf` with a PFX (`GENIEXPROC_HTP_CERT`) or thumbprint (`GENIEXPROC_HTP_CERT_THUMBPRINT`) using SDK INF2CAT and host-native SignTool, and optionally install `GENIEXPROC_HTP_CDSPRPC_DLL`. Linux/Android require a system FastRPC runtime; CMake links the target SDK library but does not install it. Cleanup removes proc-owned files only. Consumers can query `GENIEXPROC_HTP_SKEL_FILES` on `geniex_proc_htp_runtime` and stage runtime files separately. See [HTP deployment notes](../src/vision/npu/README.md).
+
+Default skels are Windows v73/v81, Linux v73/v75, and Android arm64-v8a v79/v81. Override with a unique supported list (`v68`, `v69`, `v73`, `v75`, `v79`, `v81`) using `GENIEXPROC_HTP_DSP_ARCHS`; it controls dispatch and signing. Linux/Android may set `GENIEXPROC_HTP_FASTRPC_LIBRARY`; otherwise CMake selects the target SDK library.
+
 ## Testing
+
+The common `device` test checks selection and a real RGB resize on configured hardware (no fallback). Existing processor tests use the selected Qwen2VL backend, for example:
+
+```bash
+GENIEX_QAIRT_PREPROCESS_DEVICE=npu ctest --test-dir build -R '^(vision|processor|device)$' --output-on-failure
+```
 
 After building, you can run the examples to verify functionality:
 

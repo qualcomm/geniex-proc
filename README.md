@@ -35,6 +35,7 @@ geniex-proc is built with a modular architecture. Enable only the features you n
 
 - **Core Library** (`geniex-proc`): Tokenizer + sampler + grammar-constrained sampling (always built)
 - **Vision Library** (`geniex-proc-vision`): Image processing + VLM processors — enable with `-DGENIEXPROC_ENABLE_VISION=ON`
+- **HTP preprocessing**: Optional Hexagon backend (`-DGENIEXPROC_ENABLE_HTP=ON`) for Windows/Linux ARM64 and Android arm64-v8a; see [build and deployment details](src/vision/npu/README.md).
 
 ## Image Preprocessing Pipeline
 

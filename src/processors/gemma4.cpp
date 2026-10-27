@@ -25,6 +25,7 @@
 #include <xtensor/containers/xtensor.hpp>
 
 #include "processors/tools.h"
+#include "vision/cpu/image_ops.h"
 #include "vision/vision.h"
 
 namespace geniex::gemma4 {
@@ -286,7 +287,7 @@ struct Gemma4Processor::Impl {
         if (config_.force_square_size > 0 &&
             (static_cast<int>(img.shape(0)) != config_.force_square_size ||
                 static_cast<int>(img.shape(1)) != config_.force_square_size)) {
-            img = geniex::vision::resize_image(img, config_.force_square_size, config_.force_square_size);
+            img = geniex::vision::cpu::resize_image(img, config_.force_square_size, config_.force_square_size);
         }
 
         // Step 1: aspect-ratio-preserving resize onto the patch budget. A no-op
@@ -295,7 +296,7 @@ struct Gemma4Processor::Impl {
         const int w = static_cast<int>(img.shape(1));
         const auto [th, tw] = aspectRatioPreservingSize(h, w, patch, maxp, config_.pooling_kernel_size);
         if (th != h || tw != w) {
-            img = geniex::vision::resize_image(img, th, tw);
+            img = geniex::vision::cpu::resize_image(img, th, tw);
         }
 
         const int nph = static_cast<int>(img.shape(0)) / patch;
