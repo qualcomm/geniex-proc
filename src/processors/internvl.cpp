@@ -15,6 +15,7 @@
 #include <xtensor/containers/xarray.hpp>
 #include <xtensor/containers/xtensor.hpp>
 
+#include "vision/cpu/image_ops.h"
 #include "vision/vision.h"
 
 namespace geniex::internvl {
@@ -68,7 +69,7 @@ struct InternVLProcessor::Impl {
         // ratio is intentionally not preserved, matching the reference
         // preprocessor when dynamic tiling is disabled (max_num_tiles = 1).
         if (static_cast<int>(img.shape(0)) != s || static_cast<int>(img.shape(1)) != s) {
-            img = geniex::vision::resize_image(img, s, s);
+            img = geniex::vision::cpu::resize_image(img, s, s);
         }
 
         // Rescale to [0,1], normalize per channel, and transpose HWC -> planar

@@ -9,14 +9,28 @@
 // Requires GENIEXPROC_ENABLE_VISION to be compiled.
 
 #include <cmath>
+#include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <tuple>
 
 #include <xtensor/containers/xadapt.hpp>
+#include <xtensor/containers/xarray.hpp>
 #include <xtensor/containers/xtensor.hpp>
 
+#include "geniex-proc/types.h"
+
+namespace geniex::qwen2vl {
+struct Qwen2VLConfig;
+}
+
 namespace geniex::vision {
+
+class PreprocessDevice;
+
+::geniex::PreprocessDevice resolve_preprocess_device(::geniex::PreprocessDevice requested);
+size_t checked_product(size_t left, size_t right, const char* error);
+size_t rgb_image_bytes(size_t height, size_t width, size_t element_size);
 
 // ============================================================
 // Image loading
@@ -28,19 +42,6 @@ namespace geniex::vision {
  * @throws std::runtime_error if the file cannot be loaded.
  */
 xt::xtensor<uint8_t, 3> load_image(const std::string& path);
-
-// ============================================================
-// Image resizing
-// ============================================================
-
-/**
- * @brief Resize an HWC uint8 image to (resized_height x resized_width x 3).
- * Uses Catmull-Rom (bicubic) interpolation, matching the HuggingFace default.
- * @param image Input HWC tensor.
- * @param resized_height Target height.
- * @param resized_width  Target width.
- */
-xt::xtensor<uint8_t, 3> resize_image(const xt::xtensor<uint8_t, 3>& image, int resized_height, int resized_width);
 
 // ============================================================
 // Smart resize
@@ -68,5 +69,9 @@ inline int floor_by_factor(int number, int factor) {
  * @throws std::runtime_error if the aspect ratio exceeds MAX_RATIO (200).
  */
 std::tuple<int, int> smart_resize(int height, int width, int factor, int min_pixels, int max_pixels);
+
+std::tuple<xt::xarray<float>, xt::xarray<size_t>> preprocess_qwen2vl(
+    const PreprocessDevice& device, const xt::xtensor<uint8_t, 3>& image,
+    const ::geniex::qwen2vl::Qwen2VLConfig& config);
 
 }  // namespace geniex::vision

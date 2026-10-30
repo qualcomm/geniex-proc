@@ -113,4 +113,43 @@ if(GENIEXPROC_ENABLE_VISION)
     target_include_directories(processor PRIVATE
         ${CMAKE_SOURCE_DIR}/third-party/stb
     )
+
+    set(_DEVICE_TEST_SOURCES
+        device.cpp
+        ${CMAKE_SOURCE_DIR}/src/vision/vision.cpp
+        ${CMAKE_SOURCE_DIR}/src/vision/preprocess_device.cpp
+        ${CMAKE_SOURCE_DIR}/src/vision/cpu/image_ops.cpp
+    )
+    if(GENIEXPROC_ENABLE_OPENCL)
+        list(APPEND _DEVICE_TEST_SOURCES
+            ${CMAKE_SOURCE_DIR}/src/vision/gpu/gpu_runtime.cpp
+            ${CMAKE_SOURCE_DIR}/src/vision/gpu/image_ops.cpp
+        )
+    endif()
+    if(GENIEXPROC_ENABLE_HTP)
+        list(APPEND _DEVICE_TEST_SOURCES
+            ${CMAKE_SOURCE_DIR}/src/vision/npu/npu_runtime.cpp
+            ${CMAKE_SOURCE_DIR}/src/vision/npu/image_ops.cpp
+        )
+    endif()
+    geniexproc_add_test(device ${_DEVICE_TEST_SOURCES})
+    target_include_directories(device PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/third-party/stb
+    )
+    if(GENIEXPROC_ENABLE_OPENCL)
+        target_link_libraries(device PRIVATE OpenCL::OpenCL)
+        target_compile_definitions(device PRIVATE
+            GENIEXPROC_ENABLE_OPENCL
+            GENIEXPROC_TEST_ENABLE_OPENCL
+        )
+    endif()
+    if(GENIEXPROC_ENABLE_HTP)
+        target_link_libraries(device PRIVATE geniex_proc_htp_runtime)
+        target_compile_definitions(device PRIVATE
+            GENIEXPROC_ENABLE_HTP
+            GENIEXPROC_TEST_ENABLE_HTP
+        )
+    endif()
+
 endif()
