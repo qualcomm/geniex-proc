@@ -116,6 +116,17 @@ if(OpenBLAS_FOUND)
 endif()
 
 add_subdirectory(third-party/tokenizers-cpp)
+# Rust >= 1.100 std on windows-msvc imports WaitOnAddress / WakeByAddress* from
+# synchronization.lib (see `rustc --print native-static-libs`), which tokenizers-cpp's
+# Windows link list predates. Harmless on older toolchains. Drop once upstream lists it.
+if(WIN32)
+    cmake_policy(PUSH)
+    if(POLICY CMP0079)
+        cmake_policy(SET CMP0079 NEW)  # tokenizers_c is defined in the subdirectory
+    endif()
+    target_link_libraries(tokenizers_c INTERFACE synchronization)
+    cmake_policy(POP)
+endif()
 include_directories(
     third-party/tokenizers-cpp/include
 )
