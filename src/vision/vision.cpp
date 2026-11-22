@@ -81,15 +81,18 @@ std::tuple<int, int> smart_resize(int height, int width, int factor, int min_pix
     int h_bar = std::max(factor, round_by_factor(height, factor));
     int w_bar = std::max(factor, round_by_factor(width, factor));
 
+    // Like the Python reference, scale the original size (not the rounded one) and
+    // round only once, in double precision.
     int total_pixels = h_bar * w_bar;
+    const double pixels = static_cast<double>(height) * width;
     if (total_pixels > max_pixels) {
-        float beta = std::sqrt(static_cast<float>(height * width) / static_cast<float>(max_pixels));
-        h_bar = floor_by_factor(static_cast<int>(h_bar / beta), factor);
-        w_bar = floor_by_factor(static_cast<int>(w_bar / beta), factor);
+        double beta = std::sqrt(pixels / max_pixels);
+        h_bar = std::max(factor, static_cast<int>(std::floor(height / beta / factor)) * factor);
+        w_bar = std::max(factor, static_cast<int>(std::floor(width / beta / factor)) * factor);
     } else if (total_pixels < min_pixels) {
-        float beta = std::sqrt(static_cast<float>(min_pixels) / static_cast<float>(height * width));
-        h_bar = ceil_by_factor(static_cast<int>(h_bar * beta), factor);
-        w_bar = ceil_by_factor(static_cast<int>(w_bar * beta), factor);
+        double beta = std::sqrt(min_pixels / pixels);
+        h_bar = static_cast<int>(std::ceil(height * beta / factor)) * factor;
+        w_bar = static_cast<int>(std::ceil(width * beta / factor)) * factor;
     }
 
     return {h_bar, w_bar};

@@ -107,3 +107,28 @@ TEST(VisionSmartResize, ClampsToAtLeastOneFactorInEachDim) {
     EXPECT_GE(h, factor);
     EXPECT_GE(w, factor);
 }
+
+TEST(VisionSmartResize, MatchesPythonReference) {
+    // Expected sizes from smart_resize() in qwen-vl-utils and in the Hugging Face
+    // Qwen2-VL image processor (both give the same result for these inputs).
+    constexpr int factor = 28;
+    constexpr int min_px = 4 * 28 * 28;
+    constexpr int max_px = 1280 * 28 * 28;
+
+    struct Case {
+        int height, width, expected_h, expected_w;
+    };
+    const Case cases[] = {
+        {1080, 1920, 728, 1316},  // downscaled
+        {1024, 1024, 980, 980},   // downscaled
+        {1200, 1600, 840, 1148},  // downscaled
+        {720, 1280, 728, 1288},   // only rounded
+        {30, 40, 56, 84},         // upscaled
+    };
+    for (const auto& c : cases) {
+        auto [h, w] = v::smart_resize(c.height, c.width, factor, min_px, max_px);
+        EXPECT_EQ(h, c.expected_h) << c.height << "x" << c.width;
+        EXPECT_EQ(w, c.expected_w) << c.height << "x" << c.width;
+        EXPECT_LE(static_cast<int64_t>(h) * w, max_px) << c.height << "x" << c.width;
+    }
+}
